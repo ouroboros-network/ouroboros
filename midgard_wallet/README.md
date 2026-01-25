@@ -1,15 +1,17 @@
 # Midgard Wallet
 
-A simple CLI wallet for the OVM (Ouroboros) blockchain written in Rust.
+A CLI wallet for the Ouroboros blockchain written in Rust.
 
 ## Features
 
 - **Generate new wallets** with BIP39 12-word mnemonic phrases
 - **Import wallets** from mnemonic phrase or private key
-- **Check balance** for your address
+- **Check balance** for your address (mainchain and microchains)
 - **Send OURO tokens** to other addresses
-- **View wallet information**
-- **Check blockchain status**
+- **View transaction history**
+- **Monitor node status** with detailed information
+- **View connected peers**
+- **List and interact with microchains**
 
 ## Installation
 
@@ -20,73 +22,80 @@ cd midgard_wallet
 cargo build --release
 ```
 
-The compiled binary will be located at `target/release/midgard-wallet.exe` (on Windows) or `target/release/midgard-wallet` (on Linux/Mac).
+The compiled binary will be located at `target/release/midgard-wallet.exe` (Windows) or `target/release/midgard-wallet` (Linux/Mac).
 
 ## Usage
 
-### Create a New Wallet
+### Wallet Management
 
+**Create a New Wallet:**
 ```bash
 midgard-wallet create --name "My Wallet"
 ```
+This generates a new wallet with a 12-word mnemonic phrase. Save the mnemonic securely - it's the only way to recover your wallet.
 
-This will generate a new wallet with a 12-word mnemonic phrase. **Save the mnemonic phrase securely** - it's the only way to recover your wallet!
-
-### Import a Wallet
-
-From mnemonic phrase:
+**Import from Mnemonic:**
 ```bash
-midgard-wallet import --mnemonic "your twelve word mnemonic phrase goes here like this example phrase" --name "Imported Wallet"
+midgard-wallet import --mnemonic "your twelve word mnemonic phrase goes here" --name "Imported Wallet"
 ```
 
-From private key:
+**Import from Private Key:**
 ```bash
 midgard-wallet import --private-key "your_private_key_hex" --name "Imported Wallet"
 ```
 
-### View Wallet Information
-
+**View Wallet Info:**
 ```bash
 midgard-wallet info
 ```
 
-Shows your wallet address, public key, name, and creation date.
+### Balance and Transactions
 
-### Check Balance
-
+**Check Balance:**
 ```bash
 midgard-wallet balance
 ```
 
-Fetches your current OURO balance from the blockchain.
-
-### Send OURO Tokens
-
+**Send OURO Tokens:**
 ```bash
 midgard-wallet send <recipient_address> <amount> --fee 1000
 ```
+Amount is in smallest units (1 OURO = 1,000,000,000,000 units). Nonce is automatically fetched from the blockchain.
 
-Example:
+**View Transaction History:**
 ```bash
-# Nonce is automatically fetched from blockchain
-midgard-wallet send ouro1abc123... 1000000000000 --fee 1000
-
-# Or manually specify nonce
-midgard-wallet send ouro1abc123... 1000000000000 --fee 1000 --nonce 5
+midgard-wallet history --limit 20
 ```
 
-**Notes:**
-- Amount is in the smallest units (1 OURO = 1,000,000,000,000 units)
-- Nonce is automatically fetched from the blockchain (optional override with `--nonce`)
-- Chain ID is automatically set to "ouroboros-mainnet-1"
+### Node Monitoring
 
-### Check Blockchain Status
-
+**Check Node Status:**
 ```bash
 midgard-wallet status
 ```
 
-Shows if the node is online and the current block height.
+**View Detailed Node Info:**
+```bash
+midgard-wallet node
+```
+Shows node ID, version, block height, peer count, sync status, mempool size, and uptime.
+
+**View Connected Peers:**
+```bash
+midgard-wallet peers
+```
+
+### Microchains
+
+**List Microchains:**
+```bash
+midgard-wallet microchains
+```
+
+**Check Microchain Balance:**
+```bash
+midgard-wallet micro-balance <microchain_id>
+```
 
 ### Connect to Custom Node
 
@@ -96,27 +105,34 @@ By default, the wallet connects to `http://localhost:8001`. To use a different n
 midgard-wallet --node-url http://your-node-ip:8001 balance
 ```
 
+## Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `create` | Create a new wallet |
+| `import` | Import wallet from mnemonic or private key |
+| `info` | Show wallet information |
+| `balance` | Check mainchain balance |
+| `send` | Send OURO tokens |
+| `history` | View transaction history |
+| `status` | Quick node status check |
+| `node` | Detailed node information |
+| `peers` | List connected peers |
+| `microchains` | List available microchains |
+| `micro-balance` | Check balance on a microchain |
+
 ## Wallet Storage
 
-The wallet is stored in your home directory as `midgard_wallet.json`:
+The wallet is stored in your home directory:
 - Windows: `C:\Users\YourName\midgard_wallet.json`
-- Linux/Mac: `~/.midgard_wallet.json` or `/home/yourusername/midgard_wallet.json`
+- Linux/Mac: `~/midgard_wallet.json`
 
-## Security Notes
+## Security
 
 1. **Backup your mnemonic phrase** - Write it down and store it securely offline
 2. **Never share your mnemonic or private key** with anyone
 3. **The wallet file contains your private key** - keep it secure
 4. For production use, consider adding encryption to the wallet file
-
-## Architecture
-
-The wallet consists of four main modules:
-
-- **wallet.rs** - Key generation, address encoding, wallet storage
-- **transaction.rs** - Transaction creation and signing
-- **client.rs** - API client for blockchain node communication
-- **main.rs** - CLI interface
 
 ## Transaction Format
 
@@ -129,19 +145,17 @@ Transactions are signed using Ed25519 and include:
 
 ## Requirements
 
-- OVM blockchain node running at `http://localhost:8001` (or custom URL)
+- Ouroboros node running at configured URL
 - Rust 1.70+ for building from source
 
 ## Compatibility
 
-This wallet is compatible with **Ouroboros Phase 6** blockchain with:
-- ✅ Chain ID support ("ouroboros-mainnet-1")
-- ✅ Automatic nonce management via `/ouro/nonce/{address}` endpoint
-- ✅ Ed25519 signature verification with proper signing message format
-- ✅ Replay protection through chain_id + nonce
-- ✅ Bech32 address encoding with "ouro" prefix
-
-See `COMPATIBILITY_UPDATE.md` for detailed information about recent compatibility updates.
+This wallet is compatible with Ouroboros blockchain with:
+- Chain ID support ("ouroboros-mainnet-1")
+- Automatic nonce management via `/ouro/nonce/{address}` endpoint
+- Ed25519 signature verification
+- Replay protection through chain_id + nonce
+- Bech32 address encoding with "ouro" prefix
 
 ## License
 
@@ -149,4 +163,4 @@ MIT License
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Please submit a Pull Request.

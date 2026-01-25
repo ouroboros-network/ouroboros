@@ -4,14 +4,14 @@ The official JavaScript/TypeScript SDK for building decentralized applications o
 
 ## Features
 
-- 🚀 **TypeScript First**: Full type safety with comprehensive TypeScript definitions
-- ⚡ **Promise-Based**: Modern async/await API for all operations
-- 🔒 **Built-in Signing**: Ed25519 signature support via TweetNaCl
-- 🎯 **Microchain Management**: Create and manage application-specific blockchains
-- 💰 **Balance Queries**: Check balances on mainchain and microchains
-- 📊 **State Inspection**: Query microchain state, blocks, and transaction history
-- ⚙️ **Flexible Consensus**: Choose between SingleValidator (fast) or BFT (secure)
-- 🔗 **Automatic Anchoring**: Inherit mainchain security through configurable anchoring
+- **TypeScript First**: Full type safety with comprehensive TypeScript definitions
+- **Promise-Based**: Modern async/await API for all operations
+- **Built-in Signing**: Ed25519 signature support via TweetNaCl
+- **Microchain Management**: Create and manage application-specific blockchains
+- **Balance Queries**: Check balances on mainchain and microchains
+- **State Inspection**: Query microchain state, blocks, and transaction history
+- **Flexible Consensus**: Choose between SingleValidator (fast) or BFT (secure)
+- **Automatic Anchoring**: Inherit mainchain security through configurable anchoring
 
 ## Installation
 
@@ -482,12 +482,12 @@ function MyComponent() {
 
 ## Roadmap
 
-- ✅ Core SDK implementation (TypeScript)
-- ⏳ React hooks package
-- ⏳ Vue composables package
-- ⏳ WebSocket real-time updates
-- ⏳ Smart contract support
-- ⏳ GraphQL query interface
+- Core SDK implementation (TypeScript) - Complete
+- React hooks package - In Progress
+- Vue composables package - In Progress
+- WebSocket real-time updates - Planned
+- Smart contract support - Planned
+- GraphQL query interface - Planned
 
 ## Contributing
 

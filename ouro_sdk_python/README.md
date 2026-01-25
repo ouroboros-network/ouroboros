@@ -4,14 +4,14 @@ The official Python SDK for building decentralized applications on the Ouroboros
 
 ## Features
 
-- 🐍 **Pythonic API**: Clean, idiomatic Python interface
-- 🔒 **Built-in Signing**: Ed25519 signature support via PyNaCl
-- 🎯 **Microchain Management**: Create and manage application-specific blockchains
-- 💰 **Balance Queries**: Check balances on mainchain and microchains
-- 📊 **State Inspection**: Query microchain state, blocks, and transaction history
-- ⚙️ **Flexible Consensus**: Choose between SingleValidator (fast) or BFT (secure)
-- 🔗 **Automatic Anchoring**: Inherit mainchain security through configurable anchoring
-- 📦 **Type Hints**: Full type hint support for better IDE integration
+- **Pythonic API**: Clean, idiomatic Python interface
+- **Built-in Signing**: Ed25519 signature support via PyNaCl
+- **Microchain Management**: Create and manage application-specific blockchains
+- **Balance Queries**: Check balances on mainchain and microchains
+- **State Inspection**: Query microchain state, blocks, and transaction history
+- **Flexible Consensus**: Choose between SingleValidator (fast) or BFT (secure)
+- **Automatic Anchoring**: Inherit mainchain security through configurable anchoring
+- **Type Hints**: Full type hint support for better IDE integration
 
 ## Installation
 
@@ -510,12 +510,12 @@ async def create_and_transfer():
 
 ## Roadmap
 
-- ✅ Core SDK implementation (Python)
-- ⏳ Async/await support
-- ⏳ Django ORM integration package
-- ⏳ Flask extension
-- ⏳ Smart contract support
-- ⏳ WebSocket real-time updates
+- Core SDK implementation (Python) - Complete
+- Async/await support - In Progress
+- Django ORM integration package - In Progress
+- Flask extension - Planned
+- Smart contract support - Planned
+- WebSocket real-time updates - Planned
 
 ## Contributing
 

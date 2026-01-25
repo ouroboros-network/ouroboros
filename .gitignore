@@ -1,37 +1,57 @@
-# Rust source code (NO SOURCE CODE IN REPO)
+# Main node source code (binaries distributed separately)
 ouro_dag/src/
+
+# SDK source (distributed as packages)
 ouro_sdk/src/
-ouro_wallet/src/
+ouro_sdk_js/src/
+ouro_sdk_python/ouro_sdk/
+ouro_wallet_ui/src-tauri/src/
+
+# Note: midgard_wallet/src/ is included so users can build from source
 
 # Build artifacts
 target/
+dist/
+build/
 *.exe
 *.dll
 *.so
 *.dylib
+*.wasm
 
 # Cargo files
 Cargo.lock
 
-# Database files
+# Database and data files
 sled_data/
-rocksdb_data/
+rocksdb_data*/
 *.db/
 node*_data/
 test_data/
 fresh_test_node/
+ouro_dag/data/
+dag_state.json
 
-# Environment files
+# Environment and config files with secrets
 .env
 .env.*
 !.env.example
-
-# Keys and secrets
+api_keys.json
+oracle_config.json
 *.pem
 *.key
 *.pub
 migration_signing.*
 peers.json
+
+# Test files
+ouro_dag/tests/
+
+# Config files (use templates only)
+ouro_dag/config/
+
+# Scripts (internal)
+ouro_dag/scripts/
 
 # Logs
 *.log
@@ -53,6 +73,9 @@ __pycache__/
 .venv/
 venv/
 
+# Node.js
+node_modules/
+
 # Test outputs
 benchmark_*.txt
 test_output.log
@@ -64,3 +87,11 @@ test_output.log
 # Archives
 *.tar.gz
 *.zip
+
+# Claude Code settings
+.claude/
+
+# Internal documentation
+SESSION_PROGRESS_SUMMARY.md
+POSTGRESQL_TO_ROCKSDB_CONVERSION_STATUS.md
+V0.3.0_ROADMAP.md

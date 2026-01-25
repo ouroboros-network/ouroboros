@@ -4,14 +4,14 @@ Modern desktop wallet application for the Ouroboros blockchain, built with Tauri
 
 ## Features
 
-- 🔐 **Secure Wallet Management**: Create, import, and manage wallets with BIP39 mnemonic phrases
-- 💰 **Balance Tracking**: View mainchain and microchain balances in real-time
-- 💸 **Send Transactions**: Send OURO tokens on mainchain and microchains
-- 📥 **Receive Tokens**: Display wallet address and QR code for receiving payments
-- ⛓️ **Microchain Support**: Interact with multiple microchains from a single interface
-- 📜 **Transaction History**: View all past transactions with detailed information
-- 🔗 **Node Linking**: Link wallet to nodes for reward distribution
-- ⚙️ **Customizable**: Configure node connection and wallet settings
+- **Secure Wallet Management**: Create, import, and manage wallets with BIP39 mnemonic phrases
+- **Balance Tracking**: View mainchain and microchain balances in real-time
+- **Send Transactions**: Send OURO tokens on mainchain and microchains
+- **Receive Tokens**: Display wallet address and QR code for receiving payments
+- **Microchain Support**: Interact with multiple microchains from a single interface
+- **Transaction History**: View all past transactions with detailed information
+- **Node Linking**: Link wallet to nodes for reward distribution
+- **Customizable**: Configure node connection and wallet settings
 
 ## Architecture
 
@@ -153,11 +153,11 @@ Wallet data is stored securely in:
 
 ## Security Features
 
-- 🔐 Ed25519 cryptographic signatures
-- 🔑 BIP39 mnemonic phrase support
-- 💾 Secure local storage
-- 🚫 Private keys never leave your device
-- ✅ All transactions signed locally
+- Ed25519 cryptographic signatures
+- BIP39 mnemonic phrase support
+- Secure local storage
+- Private keys never leave your device
+- All transactions signed locally
 
 ## Project Structure
 
@@ -238,7 +238,7 @@ This wallet UI is part of the Ouroboros blockchain project. For issues and contr
 
 ## Security Considerations
 
-⚠️ **WARNING**: This is alpha software. Use at your own risk.
+**WARNING**: This is alpha software. Use at your own risk.
 
 - Always backup your recovery phrase
 - Never share your private key or mnemonic
@@ -247,14 +247,14 @@ This wallet UI is part of the Ouroboros blockchain project. For issues and contr
 
 ## Roadmap
 
-- ✅ Core wallet functionality
-- ✅ Mainchain and microchain support
-- ✅ Transaction history
-- ⏳ QR code scanning
-- ⏳ Multi-wallet support
-- ⏳ Hardware wallet integration
-- ⏳ Built-in node status monitoring
-- ⏳ Staking interface
+- Core wallet functionality - Complete
+- Mainchain and microchain support - Complete
+- Transaction history - Complete
+- QR code scanning - Planned
+- Multi-wallet support - Planned
+- Hardware wallet integration - Planned
+- Built-in node status monitoring - Planned
+- Staking interface - Planned
 
 ## License
 

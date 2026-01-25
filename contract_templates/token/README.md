@@ -4,12 +4,12 @@ ERC20-like fungible token implementation for Ouroboros Virtual Machine.
 
 ## Features
 
-- ✅ Standard token interface (transfer, approve, transferFrom)
-- ✅ Minting capabilities (owner only)
-- ✅ Burning mechanism
-- ✅ Event emission
-- ✅ Full test coverage
-- ✅ Gas-optimized
+- Standard token interface (transfer, approve, transferFrom)
+- Minting capabilities (owner only)
+- Burning mechanism
+- Event emission
+- Full test coverage
+- Gas-optimized
 
 ## Usage
 

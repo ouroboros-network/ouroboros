@@ -433,12 +433,12 @@ cargo run --example client_usage
 
 ## Roadmap
 
-- ✅ Core SDK implementation (Rust)
-- ⏳ JavaScript/TypeScript SDK
-- ⏳ Python SDK bindings
-- ⏳ Smart contract support
-- ⏳ WebAssembly compilation
-- ⏳ GraphQL query interface
+- Core SDK implementation (Rust) - Complete
+- JavaScript/TypeScript SDK - In Progress
+- Python SDK bindings - In Progress
+- Smart contract support - Planned
+- WebAssembly compilation - Planned
+- GraphQL query interface - Planned
 
 ## Contributing
 

@@ -296,6 +296,6 @@ Once your node is running, you're part of the network! You can:
 
 ---
 
-**Welcome to the Ouroboros Network!** 🎉
+**Welcome to the Ouroboros Network!**
 
 Your participation helps make this network more decentralized and resilient.
