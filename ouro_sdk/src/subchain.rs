@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 /// Minimum deposit required to create a subchain (5,000 OURO)
 pub const MIN_SUBCHAIN_DEPOSIT: u64 = 500_000_000_000;
 
-/// Rent rate per block (0.01 OURO)
-pub const RENT_RATE_PER_BLOCK: u64 = 1_000_000;
+/// Rent rate per block (0.0001 OURO)
+pub const RENT_RATE_PER_BLOCK: u64 = 10_000;
 
 /// Subchain state
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

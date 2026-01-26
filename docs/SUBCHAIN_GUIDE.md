@@ -26,7 +26,7 @@ Subchains are dedicated blockchain environments designed for:
 ## Requirements
 
 - **Minimum Deposit**: 5,000 OURO (500,000,000,000 base units)
-- **Rent**: 0.01 OURO per block (~86.4 OURO/day at 1 block/sec)
+- **Rent**: 0.0001 OURO per block (~8.64 OURO/day at 1 block/sec)
 - **Running Node**: Connected to Ouroboros mainnet
 
 ## Quick Start
@@ -226,13 +226,13 @@ for (const tx of txs) {
 
 ```
 Daily cost = blocks_per_day * RENT_RATE_PER_BLOCK
-           = 86,400 * 0.01 OURO
-           = 864 OURO/day (at 1 block/second)
+           = 86,400 * 0.0001 OURO
+           = 8.64 OURO/day (at 1 block/second)
 
-Monthly cost ~= 25,920 OURO
-Yearly cost  ~= 315,360 OURO
+Monthly cost ~= 259 OURO
+Yearly cost  ~= 3,154 OURO
 
-Minimum deposit (5,000 OURO) lasts ~5.8 days
+Minimum deposit (5,000 OURO) lasts ~1.5 years
 ```
 
 Adjust `anchorFrequency` to balance cost vs security:

@@ -12,8 +12,8 @@ from .errors import InvalidConfigError, TransactionFailedError
 # Minimum deposit required to create a subchain (5,000 OURO)
 MIN_SUBCHAIN_DEPOSIT = 500_000_000_000
 
-# Rent rate per block (0.01 OURO)
-RENT_RATE_PER_BLOCK = 1_000_000
+# Rent rate per block (0.0001 OURO)
+RENT_RATE_PER_BLOCK = 10_000
 
 
 class SubchainState(Enum):
