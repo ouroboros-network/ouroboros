@@ -80,11 +80,7 @@ impl Microchain {
 
     /// Transfer tokens on this microchain
     pub async fn transfer(&mut self, from: &str, to: &str, amount: u64) -> Result<String> {
-        let mut tx = Transaction::new(from, to, amount).with_nonce(self.nonce);
-
-        // Sign if keypair is available (TODO: integrate wallet)
-        // For now, signature will need to be added externally
-
+        let tx = Transaction::new(from, to, amount).with_nonce(self.nonce);
         self.submit_tx(&tx).await
     }
 

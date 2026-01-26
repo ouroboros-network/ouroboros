@@ -1,5 +1,5 @@
 use crate::error::{Result, SdkError};
-use ed25519_dalek::{Keypair, Signature, Signer};
+use ed25519_dalek::{SigningKey, Signer};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -60,10 +60,10 @@ impl Transaction {
         self
     }
 
-    /// Sign transaction with keypair
-    pub fn sign(&mut self, keypair: &Keypair) -> Result<()> {
+    /// Sign transaction with signing key
+    pub fn sign(&mut self, signing_key: &SigningKey) -> Result<()> {
         let message = self.signing_message();
-        let signature = keypair.sign(message.as_bytes());
+        let signature = signing_key.sign(message.as_bytes());
         self.signature = hex::encode(signature.to_bytes());
         Ok(())
     }
@@ -72,11 +72,11 @@ impl Transaction {
     pub fn sign_with_key(&mut self, private_key_hex: &str) -> Result<()> {
         let private_bytes = hex::decode(private_key_hex)
             .map_err(|_| SdkError::InvalidSignature)?;
-        let secret = ed25519_dalek::SecretKey::from_bytes(&private_bytes)
+        let private_array: [u8; 32] = private_bytes
+            .try_into()
             .map_err(|_| SdkError::InvalidSignature)?;
-        let public = ed25519_dalek::PublicKey::from(&secret);
-        let keypair = Keypair { secret, public };
-        self.sign(&keypair)
+        let signing_key = SigningKey::from_bytes(&private_array);
+        self.sign(&signing_key)
     }
 
     /// Get signing message

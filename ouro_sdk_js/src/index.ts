@@ -1,7 +1,10 @@
 /**
- * Ouroboros Microchain SDK for JavaScript/TypeScript
+ * Ouroboros SDK for JavaScript/TypeScript
  *
  * Build decentralized applications on the Ouroboros blockchain platform.
+ *
+ * - Microchains: For dApps, games, NFTs, user wallets
+ * - Subchains: For high-scale business infrastructure (payments, oracles, bridges)
  *
  * @packageDocumentation
  */
@@ -9,6 +12,14 @@
 // Core classes
 export { OuroClient } from './client';
 export { Microchain, MicrochainBuilder } from './microchain';
+export {
+  Subchain,
+  SubchainBuilder,
+  SubchainState,
+  MIN_SUBCHAIN_DEPOSIT,
+  RENT_RATE_PER_BLOCK,
+} from './subchain';
+export type { SubchainConfig, SubchainStatus, ValidatorConfig } from './subchain';
 export { Transaction, TransactionBuilder } from './transaction';
 
 // Types
@@ -35,10 +46,20 @@ export {
   InvalidConfigError,
 } from './errors';
 
+// Subchain imports for default export
+import {
+  Subchain,
+  SubchainBuilder,
+  SubchainState,
+  MIN_SUBCHAIN_DEPOSIT,
+  RENT_RATE_PER_BLOCK,
+} from './subchain';
+
 /**
  * Default export with all SDK exports
  */
 export default {
+  // Microchain (dApps)
   OuroClient,
   Microchain,
   MicrochainBuilder,
@@ -46,4 +67,10 @@ export default {
   TransactionBuilder,
   ConsensusType,
   TxStatus,
+  // Subchain (infrastructure)
+  Subchain,
+  SubchainBuilder,
+  SubchainState,
+  MIN_SUBCHAIN_DEPOSIT,
+  RENT_RATE_PER_BLOCK,
 };

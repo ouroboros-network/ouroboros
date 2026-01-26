@@ -1,11 +1,24 @@
 """
-Ouroboros Microchain SDK for Python
+Ouroboros SDK for Python
 
 Build decentralized applications on the Ouroboros blockchain platform.
+
+- Microchains: For dApps, games, NFTs, user wallets
+- Subchains: For high-scale business infrastructure (payments, oracles, bridges)
 """
 
 from .client import OuroClient
 from .microchain import Microchain, MicrochainBuilder
+from .subchain import (
+    Subchain,
+    SubchainBuilder,
+    SubchainConfig,
+    SubchainStatus,
+    SubchainState,
+    ValidatorConfig,
+    MIN_SUBCHAIN_DEPOSIT,
+    RENT_RATE_PER_BLOCK,
+)
 from .transaction import Transaction, TransactionBuilder
 from .types import (
     ConsensusType,
@@ -28,7 +41,7 @@ from .errors import (
     InvalidConfigError,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     # Core classes
     "OuroClient",
@@ -36,6 +49,15 @@ __all__ = [
     "MicrochainBuilder",
     "Transaction",
     "TransactionBuilder",
+    # Subchain classes
+    "Subchain",
+    "SubchainBuilder",
+    "SubchainConfig",
+    "SubchainStatus",
+    "SubchainState",
+    "ValidatorConfig",
+    "MIN_SUBCHAIN_DEPOSIT",
+    "RENT_RATE_PER_BLOCK",
     # Types
     "ConsensusType",
     "TxStatus",

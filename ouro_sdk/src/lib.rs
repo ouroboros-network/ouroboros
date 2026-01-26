@@ -1,11 +1,13 @@
 pub mod microchain;
+pub mod subchain;
 pub mod transaction;
 pub mod client;
 pub mod types;
 pub mod error;
 
-pub use microchain::Microchain;
-pub use transaction::Transaction;
+pub use microchain::{Microchain, MicrochainBuilder};
+pub use subchain::{Subchain, SubchainBuilder, SubchainConfig, SubchainStatus, ValidatorConfig};
+pub use transaction::{Transaction, TransactionBuilder};
 pub use client::OuroClient;
 pub use types::{MicrochainConfig, ConsensusType, AnchorFrequency};
 pub use error::{SdkError, Result};
@@ -16,6 +18,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::microchain::Microchain;
+    pub use crate::subchain::{Subchain, SubchainBuilder, SubchainConfig};
     pub use crate::transaction::Transaction;
     pub use crate::client::OuroClient;
     pub use crate::types::*;

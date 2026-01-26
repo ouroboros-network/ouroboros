@@ -15,12 +15,12 @@ use serde_json::json;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🏪 Ouroboros SDK - Complete dApp Example: Marketplace\n");
-    println!("=" .repeat(60));
+    println!("{}", "=".repeat(60));
     println!();
 
     // Step 1: Deploy the marketplace microchain
     println!("📦 Step 1: Deploying Marketplace Microchain");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let mut marketplace = MicrochainBuilder::new("DecentralizedMarket", "ouro1marketplace_owner...")
         .node("http://localhost:8001")
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 2: Setup - Create initial liquidity
     println!("💰 Step 2: Initial Setup - Creating Liquidity");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let seller = "ouro1seller_alice...";
     let buyer = "ouro1buyer_bob...";
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 3: Seller lists an item
     println!("📝 Step 3: Seller Lists Item for Sale");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let mut list_tx = marketplace.tx()
         .from(seller)
@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 4: Buyer purchases the item
     println!("🛒 Step 4: Buyer Purchases Item");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let mut purchase_tx = marketplace.tx()
         .from(buyer)
@@ -116,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 5: Transfer item ownership
     println!("🔄 Step 5: Transfer Item Ownership");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let mut transfer_tx = marketplace.tx()
         .from(marketplace_contract)
@@ -140,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 6: Pay seller (minus marketplace fee)
     println!("💸 Step 6: Payment to Seller");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let marketplace_fee = 50;  // 5% fee
     let seller_payment = 950;  // 95% to seller
@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 7: Query transaction history
     println!("📜 Step 7: Query Transaction History");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let history = marketplace.tx_history(0, 100).await?;
     println!("   Total transactions: {}", history.len());
@@ -176,7 +176,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 8: Check microchain state
     println!("📊 Step 8: Check Microchain State");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let state = marketplace.state().await?;
     println!("   Name: {}", state.name);
@@ -190,7 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 9: Anchor to mainchain for security
     println!("⚓ Step 9: Anchor to Mainchain");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
     println!("   Anchoring ensures all marketplace transactions are");
     println!("   secured by the Ouroboros mainchain's BFT consensus.");
     println!();
@@ -203,7 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 10: Query blocks
     println!("🧱 Step 10: Query Recent Blocks");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     let blocks = marketplace.blocks(5).await?;
     println!("   Recent {} blocks:", blocks.len());
@@ -216,9 +216,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Summary
-    println!("=" .repeat(60));
+    println!("{}", "=".repeat(60));
     println!("🎉 Marketplace dApp Demonstration Complete!");
-    println!("=" .repeat(60));
+    println!("{}", "=".repeat(60));
     println!();
     println!("Summary:");
     println!("  ✅ Created marketplace microchain");

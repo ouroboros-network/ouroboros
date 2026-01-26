@@ -2,14 +2,16 @@ use crate::error::{Result, SdkError};
 use crate::transaction::Transaction;
 use crate::types::*;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 
 /// Main client for interacting with Ouroboros network
 #[derive(Clone)]
 pub struct OuroClient {
-    base_url: String,
-    client: Client,
+    /// Base URL for the node
+    pub base_url: String,
+    /// HTTP client
+    pub client: Client,
 }
 
 impl OuroClient {
@@ -161,6 +163,178 @@ impl OuroClient {
         let response = self.client.get(&url).send().await?;
         Ok(response.status().is_success())
     }
+
+    // ========== Subchain Methods ==========
+
+    /// Get subchain status
+    pub async fn get_subchain_status(&self, subchain_id: &str) -> Result<crate::subchain::SubchainStatus> {
+        let url = format!("{}/subchain/{}/status", self.base_url, subchain_id);
+        let response: SubchainStatusResponse = self.client.get(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        Ok(crate::subchain::SubchainStatus {
+            id: response.id,
+            name: response.name,
+            owner: response.owner,
+            state: match response.state.as_str() {
+                "active" => crate::subchain::SubchainState::Active,
+                "grace_period" => crate::subchain::SubchainState::GracePeriod,
+                "terminated" => crate::subchain::SubchainState::Terminated,
+                _ => crate::subchain::SubchainState::Active,
+            },
+            deposit_balance: response.deposit_balance,
+            blocks_remaining: response.blocks_remaining,
+            block_height: response.block_height,
+            tx_count: response.tx_count,
+            last_anchor_height: response.last_anchor_height,
+            validator_count: response.validator_count,
+        })
+    }
+
+    /// Register a new subchain
+    pub async fn register_subchain(&self, config: &crate::subchain::SubchainConfig) -> Result<String> {
+        let url = format!("{}/subchain/register", self.base_url);
+        let response: RegisterSubchainResponse = self.client.post(&url)
+            .json(&json!({
+                "name": config.name,
+                "owner": config.owner,
+                "deposit": config.deposit,
+                "anchor_frequency": config.anchor_frequency,
+                "rpc_endpoint": config.rpc_endpoint,
+                "validators": config.validators,
+            }))
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if response.success {
+            Ok(response.subchain_id)
+        } else {
+            Err(SdkError::Other(
+                response.message.unwrap_or_else(|| "Failed to register subchain".to_string())
+            ))
+        }
+    }
+
+    /// Top up subchain rent
+    pub async fn top_up_subchain_rent(&self, subchain_id: &str, amount: u64) -> Result<String> {
+        let url = format!("{}/subchain/{}/topup", self.base_url, subchain_id);
+        let response: GenericTxResponse = self.client.post(&url)
+            .json(&json!({ "amount": amount }))
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if response.success {
+            Ok(response.tx_id.unwrap_or_default())
+        } else {
+            Err(SdkError::TransactionFailed(
+                response.message.unwrap_or_else(|| "Failed to top up rent".to_string())
+            ))
+        }
+    }
+
+    /// Get subchain balance
+    pub async fn get_subchain_balance(&self, subchain_id: &str, address: &str) -> Result<u64> {
+        let url = format!("{}/subchain/{}/balance/{}", self.base_url, subchain_id, address);
+        let response: MicrochainBalanceResponse = self.client.get(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        Ok(response.balance)
+    }
+
+    /// Anchor subchain to mainchain
+    pub async fn anchor_subchain(&self, subchain_id: &str) -> Result<String> {
+        let url = format!("{}/subchain/{}/anchor", self.base_url, subchain_id);
+        let response: AnchorResponse = self.client.post(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if response.success {
+            Ok(response.anchor_id)
+        } else {
+            Err(SdkError::AnchorFailed(
+                response.message.unwrap_or_else(|| "Unknown error".to_string())
+            ))
+        }
+    }
+
+    /// Add validator to subchain
+    pub async fn add_subchain_validator(&self, subchain_id: &str, validator: &crate::subchain::ValidatorConfig) -> Result<String> {
+        let url = format!("{}/subchain/{}/validators", self.base_url, subchain_id);
+        let response: GenericTxResponse = self.client.post(&url)
+            .json(validator)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if response.success {
+            Ok(response.tx_id.unwrap_or_default())
+        } else {
+            Err(SdkError::Other(
+                response.message.unwrap_or_else(|| "Failed to add validator".to_string())
+            ))
+        }
+    }
+
+    /// Remove validator from subchain
+    pub async fn remove_subchain_validator(&self, subchain_id: &str, pubkey: &str) -> Result<String> {
+        let url = format!("{}/subchain/{}/validators/{}", self.base_url, subchain_id, pubkey);
+        let response: GenericTxResponse = self.client.delete(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if response.success {
+            Ok(response.tx_id.unwrap_or_default())
+        } else {
+            Err(SdkError::Other(
+                response.message.unwrap_or_else(|| "Failed to remove validator".to_string())
+            ))
+        }
+    }
+
+    /// Get subchain validators
+    pub async fn get_subchain_validators(&self, subchain_id: &str) -> Result<Vec<crate::subchain::ValidatorConfig>> {
+        let url = format!("{}/subchain/{}/validators", self.base_url, subchain_id);
+        let response: ValidatorsResponse = self.client.get(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        Ok(response.validators)
+    }
+
+    /// Withdraw subchain deposit
+    pub async fn withdraw_subchain_deposit(&self, subchain_id: &str) -> Result<String> {
+        let url = format!("{}/subchain/{}/withdraw", self.base_url, subchain_id);
+        let response: GenericTxResponse = self.client.post(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if response.success {
+            Ok(response.tx_id.unwrap_or_default())
+        } else {
+            Err(SdkError::Other(
+                response.message.unwrap_or_else(|| "Failed to withdraw deposit".to_string())
+            ))
+        }
+    }
 }
 
 // Internal response types
@@ -204,6 +378,39 @@ struct AnchorResponse {
     success: bool,
     anchor_id: String,
     message: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SubchainStatusResponse {
+    id: String,
+    name: String,
+    owner: String,
+    state: String,
+    deposit_balance: u64,
+    blocks_remaining: u64,
+    block_height: u64,
+    tx_count: u64,
+    last_anchor_height: Option<u64>,
+    validator_count: usize,
+}
+
+#[derive(Deserialize)]
+struct RegisterSubchainResponse {
+    success: bool,
+    subchain_id: String,
+    message: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GenericTxResponse {
+    success: bool,
+    tx_id: Option<String>,
+    message: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ValidatorsResponse {
+    validators: Vec<crate::subchain::ValidatorConfig>,
 }
 
 #[cfg(test)]
