@@ -77,14 +77,14 @@ mod token_tests {
             to: &str,
             amount: u64,
         ) -> Result<(), String> {
-            // Check allowance
-            let allowance = self
+            // Check allowance (copy value to avoid borrow issues)
+            let allowance = *self
                 .allowances
                 .get(from)
                 .and_then(|map| map.get(spender))
                 .unwrap_or(&0);
 
-            if *allowance < amount {
+            if allowance < amount {
                 return Err(format!("Insufficient allowance: {} < {}", allowance, amount));
             }
 

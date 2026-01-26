@@ -44,12 +44,12 @@ mod multi_contract_tests {
         }
 
         fn transfer_from(&mut self, spender: &str, from: &str, to: &str, amount: u64) -> Result<(), String> {
-            let allowance = self.allowances
+            let allowance = *self.allowances
                 .get(from)
                 .and_then(|map| map.get(spender))
                 .unwrap_or(&0);
 
-            if *allowance < amount {
+            if allowance < amount {
                 return Err("Insufficient allowance".to_string());
             }
 
