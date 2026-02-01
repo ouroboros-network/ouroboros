@@ -1,0 +1,150 @@
+{
+  "node_type": "oracle",
+  "description": "Ouroboros Oracle Node Configuration",
+  "version": "1.0.0",
+
+  "oracle": {
+    "enabled": true,
+    "operator_id": "REPLACE_WITH_YOUR_OPERATOR_ID",
+    "stake_amount": 10000000000000,
+    "commission_rate": 0.02
+  },
+
+  "data_sources": {
+    "crypto": {
+      "enabled": true,
+      "primary_sources": ["coingecko", "binance", "coinbase"],
+      "fallback_sources": ["kraken", "bitstamp"],
+      "update_interval_ms": 5000,
+      "max_staleness_ms": 30000,
+      "symbols": ["BTC", "ETH", "OURO", "SOL", "AVAX", "MATIC", "ARB", "OP", "LINK", "UNI"]
+    },
+    "weather": {
+      "enabled": true,
+      "source": "open-meteo",
+      "update_interval_ms": 300000,
+      "locations": []
+    },
+    "stocks": {
+      "enabled": true,
+      "source": "yahoo-finance",
+      "update_interval_ms": 60000,
+      "symbols": ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"],
+      "market_hours_only": true
+    },
+    "news": {
+      "enabled": true,
+      "sources": ["hackernews", "reddit"],
+      "update_interval_ms": 300000
+    },
+    "random": {
+      "enabled": true,
+      "source": "random-org",
+      "update_interval_ms": 60000
+    }
+  },
+
+  "aggregation": {
+    "method": "median",
+    "min_sources": 3,
+    "outlier_threshold_percent": 5.0,
+    "confidence_calculation": "weighted_average",
+    "weight_by_reputation": true
+  },
+
+  "submission": {
+    "batch_size": 10,
+    "batch_interval_ms": 5000,
+    "retry_attempts": 3,
+    "retry_delay_ms": 1000,
+    "max_pending_submissions": 100
+  },
+
+  "reputation": {
+    "initial_score": 100,
+    "max_score": 1000,
+    "min_score": 0,
+    "accuracy_weight": 0.5,
+    "uptime_weight": 0.3,
+    "latency_weight": 0.2,
+    "decay_rate": 0.999
+  },
+
+  "heartbeat": {
+    "enabled": true,
+    "interval_ms": 30000,
+    "timeout_ms": 10000,
+    "max_missed": 5
+  },
+
+  "networking": {
+    "api_endpoint": "http://0.0.0.0:8081",
+    "node_endpoint": "http://localhost:8001",
+    "max_connections": 100,
+    "connection_timeout_ms": 5000,
+    "request_timeout_ms": 10000
+  },
+
+  "api_keys": {
+    "description": "Optional API keys for premium data sources",
+    "coingecko_pro": null,
+    "newsapi": null,
+    "openweathermap": null,
+    "alphavantage": null,
+    "nasa": "DEMO_KEY",
+    "football_data": null
+  },
+
+  "rate_limiting": {
+    "enabled": true,
+    "max_requests_per_source_per_minute": 30,
+    "global_max_requests_per_minute": 300,
+    "backoff_strategy": "exponential",
+    "initial_backoff_ms": 1000,
+    "max_backoff_ms": 60000
+  },
+
+  "caching": {
+    "enabled": true,
+    "ttl_seconds": 60,
+    "max_entries": 10000,
+    "eviction_policy": "lru"
+  },
+
+  "monitoring": {
+    "prometheus_enabled": true,
+    "prometheus_port": 9091,
+    "metrics_prefix": "ouro_oracle_",
+    "log_level": "info",
+    "log_format": "json"
+  },
+
+  "alerts": {
+    "enabled": true,
+    "channels": ["log"],
+    "alert_on_submission_failure": true,
+    "submission_failure_threshold": 5,
+    "alert_on_source_failure": true,
+    "source_failure_threshold": 3,
+    "alert_on_low_reputation": true,
+    "low_reputation_threshold": 50
+  },
+
+  "security": {
+    "sign_submissions": true,
+    "verify_source_certificates": true,
+    "use_tor_for_privacy": false,
+    "tor_proxy": "socks5://127.0.0.1:9050"
+  },
+
+  "hardware_requirements": {
+    "min_cpu_cores": 2,
+    "recommended_cpu_cores": 4,
+    "min_ram_gb": 4,
+    "recommended_ram_gb": 8,
+    "min_storage_gb": 50,
+    "recommended_storage_gb": 100,
+    "min_bandwidth_mbps": 50,
+    "recommended_bandwidth_mbps": 100
+  }
+}

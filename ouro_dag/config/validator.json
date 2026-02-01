@@ -1,0 +1,130 @@
+{
+  "node_type": "validator",
+  "description": "Ouroboros Validator Node Configuration",
+  "version": "1.0.0",
+
+  "validator": {
+    "enabled": true,
+    "commission_rate": 0.05,
+    "max_commission_rate": 0.20,
+    "max_commission_change_rate": 0.01,
+    "min_self_delegation": 10000000000000,
+    "unbonding_time_secs": 1209600,
+    "max_validators_per_operator": 1
+  },
+
+  "consensus": {
+    "participate_in_bft": true,
+    "propose_blocks": true,
+    "vote_on_proposals": true,
+    "sign_blocks": true,
+    "priority_gas_price": 1000000
+  },
+
+  "staking": {
+    "auto_compound": true,
+    "compound_frequency_secs": 86400,
+    "delegation_enabled": true,
+    "min_delegation": 1000000000000,
+    "max_delegators": 10000
+  },
+
+  "slashing_protection": {
+    "enabled": true,
+    "double_sign_protection": true,
+    "max_missed_blocks": 100,
+    "signed_blocks_window": 10000,
+    "min_signed_per_window": 0.05
+  },
+
+  "key_management": {
+    "use_hsm": false,
+    "hsm_provider": null,
+    "key_rotation_enabled": false,
+    "key_rotation_interval_days": 90,
+    "backup_keys_encrypted": true
+  },
+
+  "networking": {
+    "max_inbound_peers": 40,
+    "max_outbound_peers": 10,
+    "persistent_peers_max_dial_period_secs": 30,
+    "flush_throttle_timeout_ms": 100,
+    "max_packet_msg_payload_size": 1024,
+    "send_rate": 5120000,
+    "recv_rate": 5120000,
+    "pex_enabled": true,
+    "seed_mode": false,
+    "private_peer_ids": []
+  },
+
+  "mempool": {
+    "size": 5000,
+    "max_txs_bytes": 1073741824,
+    "cache_size": 10000,
+    "keep_invalid_txs_in_cache": false,
+    "max_tx_bytes": 1048576,
+    "max_batch_bytes": 10485760
+  },
+
+  "state_sync": {
+    "enabled": true,
+    "snapshot_interval": 1000,
+    "snapshot_keep_recent": 2,
+    "snapshot_chunk_size": 10485760
+  },
+
+  "monitoring": {
+    "prometheus_enabled": true,
+    "prometheus_listen_addr": "0.0.0.0:26660",
+    "max_open_connections": 3,
+    "block_time_histogram_enabled": true,
+    "consensus_metrics_enabled": true,
+    "p2p_metrics_enabled": true,
+    "mempool_metrics_enabled": true
+  },
+
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output": ["stdout", "file"],
+    "log_file_path": "logs/validator.log",
+    "log_file_max_size_mb": 100,
+    "log_file_max_backups": 10,
+    "log_file_max_age_days": 30
+  },
+
+  "backup": {
+    "enabled": true,
+    "interval_hours": 6,
+    "retention_days": 7,
+    "compress": true,
+    "encrypt": true,
+    "remote_backup_enabled": false
+  },
+
+  "alerts": {
+    "enabled": true,
+    "channels": ["log"],
+    "alert_on_missed_blocks": true,
+    "missed_blocks_threshold": 10,
+    "alert_on_low_peers": true,
+    "low_peers_threshold": 3,
+    "alert_on_disk_space": true,
+    "disk_space_threshold_percent": 90,
+    "alert_on_memory": true,
+    "memory_threshold_percent": 90
+  },
+
+  "hardware_requirements": {
+    "min_cpu_cores": 4,
+    "recommended_cpu_cores": 8,
+    "min_ram_gb": 8,
+    "recommended_ram_gb": 32,
+    "min_storage_gb": 500,
+    "recommended_storage_gb": 2000,
+    "storage_type": "SSD/NVMe",
+    "min_bandwidth_mbps": 100,
+    "recommended_bandwidth_mbps": 1000
+  }
+}

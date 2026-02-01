@@ -20,3 +20,10 @@ rand = "0.8"
 sha2 = "0.10"
 anyhow = "1.0"
 colored = "2.1"
+
+# Encryption for secure wallet storage
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+zeroize = { version = "1.7", features = ["derive"] }
+base64 = "0.22"
+rpassword = "7.3"

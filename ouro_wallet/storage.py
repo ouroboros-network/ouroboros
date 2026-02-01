@@ -1,2 +1,0 @@
-balances = {}
-transactions = []

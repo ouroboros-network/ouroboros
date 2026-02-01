@@ -1,0 +1,168 @@
+{
+  "network": {
+    "chain_id": "ouroboros-mainnet-1",
+    "network_name": "Ouroboros Mainnet",
+    "is_testnet": false,
+    "genesis_time": "2026-02-01T00:00:00Z",
+    "version": "1.0.0"
+  },
+
+  "consensus": {
+    "type": "HotStuff-BFT",
+    "block_time_ms": 2000,
+    "max_block_size_bytes": 2097152,
+    "min_validators": 4,
+    "max_validators": 100,
+    "validator_stake_minimum": 100000000000000,
+    "slash_fraction_double_sign": 0.05,
+    "slash_fraction_downtime": 0.01,
+    "downtime_jail_duration_secs": 600
+  },
+
+  "economics": {
+    "native_token": "OURO",
+    "decimals": 12,
+    "initial_supply": 1000000000000000000,
+    "tail_emission_rate": 0.01,
+    "fee_burn_rate": 0.1,
+    "treasury_rate": 0.1,
+    "validator_reward_rate": 0.7,
+    "developer_reward_rate": 0.1
+  },
+
+  "oracle_system": {
+    "min_stake_required": 10000000000000,
+    "update_interval_ms": 10000,
+    "max_price_deviation_percent": 2.0,
+    "heartbeat_interval_ms": 60000,
+    "slashing_threshold": 5,
+    "reputation_decay_rate": 0.999,
+    "min_sources_for_aggregation": 5,
+    "confidence_threshold": 0.8
+  },
+
+  "guardian_council": {
+    "threshold": 5,
+    "timelock_delay_secs": 604800,
+    "emergency_timelock_secs": 86400
+  },
+
+  "free_data_feeds": {
+    "crypto": {
+      "enabled": true,
+      "sources": ["coingecko", "binance", "coinbase"],
+      "symbols": ["BTC", "ETH", "OURO", "SOL", "AVAX", "MATIC", "ARB", "OP"],
+      "refresh_ms": 10000
+    },
+    "weather": {
+      "enabled": true,
+      "source": "open-meteo",
+      "default_locations": [
+        {"name": "New York", "lat": 40.7128, "lon": -74.0060},
+        {"name": "London", "lat": 51.5074, "lon": -0.1278},
+        {"name": "Tokyo", "lat": 35.6762, "lon": 139.6503},
+        {"name": "Singapore", "lat": 1.3521, "lon": 103.8198},
+        {"name": "Dubai", "lat": 25.2048, "lon": 55.2708}
+      ],
+      "refresh_ms": 300000
+    },
+    "stocks": {
+      "enabled": true,
+      "source": "yahoo-finance",
+      "symbols": ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "META", "NVDA"],
+      "refresh_ms": 60000
+    },
+    "news": {
+      "enabled": true,
+      "sources": ["hackernews", "reddit"],
+      "subreddits": ["cryptocurrency", "ethereum", "bitcoin", "defi"],
+      "refresh_ms": 300000
+    },
+    "random": {
+      "enabled": true,
+      "source": "random-org",
+      "refresh_ms": 60000
+    },
+    "government": {
+      "enabled": true,
+      "refresh_ms": 3600000
+    }
+  },
+
+  "cross_chain_relay": {
+    "enabled": true,
+    "supported_chains": [
+      {
+        "name": "Ethereum",
+        "chain_id": 1,
+        "contract_address": "0x0000000000000000000000000000000000000000",
+        "confirmation_blocks": 12
+      },
+      {
+        "name": "BSC",
+        "chain_id": 56,
+        "contract_address": "0x0000000000000000000000000000000000000000",
+        "confirmation_blocks": 15
+      },
+      {
+        "name": "Polygon",
+        "chain_id": 137,
+        "contract_address": "0x0000000000000000000000000000000000000000",
+        "confirmation_blocks": 128
+      },
+      {
+        "name": "Arbitrum",
+        "chain_id": 42161,
+        "contract_address": "0x0000000000000000000000000000000000000000",
+        "confirmation_blocks": 1
+      },
+      {
+        "name": "Optimism",
+        "chain_id": 10,
+        "contract_address": "0x0000000000000000000000000000000000000000",
+        "confirmation_blocks": 1
+      },
+      {
+        "name": "Avalanche",
+        "chain_id": 43114,
+        "contract_address": "0x0000000000000000000000000000000000000000",
+        "confirmation_blocks": 1
+      }
+    ]
+  },
+
+  "endpoints": {
+    "oracle_api": "https://oracle.ouro.network",
+    "node_api": "https://api.ouro.network",
+    "explorer_api": "https://explorer.ouro.network/api",
+    "p2p_port": 9001,
+    "bft_port": 9091
+  },
+
+  "monitoring": {
+    "prometheus_enabled": true,
+    "prometheus_port": 9090,
+    "grafana_enabled": true,
+    "log_level": "info",
+    "enable_tracing": true,
+    "alerting_enabled": true
+  },
+
+  "security": {
+    "rate_limit_enabled": true,
+    "max_requests_per_minute": 60,
+    "require_api_key": true,
+    "tls_enabled": true,
+    "min_tls_version": "1.3",
+    "cors_allowed_origins": ["https://app.ouro.network", "https://explorer.ouro.network"],
+    "ddos_protection_enabled": true
+  },
+
+  "deployment": {
+    "docker_image": "ouroboros/node:mainnet-v1.0.0",
+    "min_cpu": "4",
+    "min_memory_gb": 8,
+    "recommended_storage_gb": 500,
+    "recommended_bandwidth_mbps": 100
+  }
+}

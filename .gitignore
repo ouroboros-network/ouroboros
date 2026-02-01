@@ -1,14 +1,3 @@
-# Main node source code (binaries distributed separately)
-ouro_dag/src/
-
-# SDK source (distributed as packages)
-ouro_sdk/src/
-ouro_sdk_js/src/
-ouro_sdk_python/ouro_sdk/
-ouro_wallet_ui/src-tauri/src/
-
-# Note: midgard_wallet/src/ is included so users can build from source
-
 # Build artifacts
 target/
 dist/
@@ -43,15 +32,6 @@ oracle_config.json
 *.pub
 migration_signing.*
 peers.json
-
-# Test files
-ouro_dag/tests/
-
-# Config files (use templates only)
-ouro_dag/config/
-
-# Scripts (internal)
-ouro_dag/scripts/
 
 # Logs
 *.log

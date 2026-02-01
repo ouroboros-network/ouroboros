@@ -1,0 +1,107 @@
+{
+  "network": {
+    "chain_id": "ouroboros-testnet-1",
+    "network_name": "Ouroboros Testnet",
+    "is_testnet": true,
+    "genesis_time": "2026-01-17T00:00:00Z"
+  },
+
+  "oracle_system": {
+    "min_stake_required": 5000000000000,
+    "update_interval_ms": 5000,
+    "max_price_deviation_percent": 5.0,
+    "heartbeat_interval_ms": 30000,
+    "slashing_threshold": 3,
+    "reputation_decay_rate": 0.995,
+    "min_sources_for_aggregation": 3
+  },
+
+  "guardian_council": {
+    "members": [
+      "testnet_guardian_1",
+      "testnet_guardian_2",
+      "testnet_guardian_3",
+      "testnet_guardian_4",
+      "testnet_guardian_5"
+    ],
+    "threshold": 3,
+    "timelock_delay_secs": 86400
+  },
+
+  "free_data_feeds": {
+    "crypto": {
+      "enabled": true,
+      "sources": ["coingecko", "binance", "coinbase"],
+      "symbols": ["BTC", "ETH", "OURO"],
+      "refresh_ms": 5000
+    },
+    "weather": {
+      "enabled": true,
+      "source": "open-meteo",
+      "default_locations": [
+        {"name": "New York", "lat": 40.7128, "lon": -74.0060},
+        {"name": "London", "lat": 51.5074, "lon": -0.1278},
+        {"name": "Tokyo", "lat": 35.6762, "lon": 139.6503}
+      ],
+      "refresh_ms": 300000
+    },
+    "stocks": {
+      "enabled": true,
+      "source": "yahoo-finance",
+      "symbols": ["AAPL", "GOOGL", "MSFT", "TSLA"],
+      "refresh_ms": 60000
+    },
+    "news": {
+      "enabled": true,
+      "sources": ["hackernews", "reddit"],
+      "subreddits": ["cryptocurrency", "ethereum", "bitcoin"],
+      "refresh_ms": 300000
+    },
+    "random": {
+      "enabled": true,
+      "source": "random-org",
+      "refresh_ms": 60000
+    },
+    "government": {
+      "enabled": true,
+      "nasa_api_key": "DEMO_KEY",
+      "refresh_ms": 3600000
+    }
+  },
+
+  "testnet_faucet": {
+    "enabled": true,
+    "amount_per_request": 100000000000,
+    "cooldown_seconds": 86400,
+    "max_daily_claims": 10
+  },
+
+  "endpoints": {
+    "oracle_api": "http://localhost:8081",
+    "node_api": "http://localhost:8001",
+    "p2p_port": 9001,
+    "bft_port": 9091
+  },
+
+  "monitoring": {
+    "prometheus_enabled": true,
+    "prometheus_port": 9090,
+    "grafana_enabled": true,
+    "log_level": "info",
+    "enable_tracing": true
+  },
+
+  "security": {
+    "rate_limit_enabled": true,
+    "max_requests_per_minute": 100,
+    "require_api_key": false,
+    "tls_enabled": false
+  },
+
+  "deployment": {
+    "docker_image": "ouroboros/oracle-node:testnet-v0.3.0",
+    "min_cpu": "2",
+    "min_memory_gb": 4,
+    "recommended_storage_gb": 50
+  }
+}
