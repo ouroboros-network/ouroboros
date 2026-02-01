@@ -57,24 +57,26 @@ jobs:
           path: ouro_dag/target/aarch64-unknown-linux-gnu/release/ouro_dag-linux-arm64
 
   build-macos-x64:
-    runs-on: macos-13  # Intel Mac
+    runs-on: macos-14  # Cross-compile from ARM64 Mac
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Build
+        with:
+          targets: x86_64-apple-darwin
+      - name: Build for x64
         run: |
           cd ouro_dag
-          cargo build --release --bin ouro_dag
+          cargo build --release --bin ouro_dag --target x86_64-apple-darwin
       - name: Package
         run: |
-          cd ouro_dag/target/release
+          cd ouro_dag/target/x86_64-apple-darwin/release
           cp ouro_dag ouro_dag-macos-x64
           chmod +x ouro_dag-macos-x64
       - uses: actions/upload-artifact@v4
         with:
           name: ouro_dag-macos-x64
-          path: ouro_dag/target/release/ouro_dag-macos-x64
+          path: ouro_dag/target/x86_64-apple-darwin/release/ouro_dag-macos-x64
 
   build-macos-arm64:
     runs-on: macos-14  # Apple Silicon Mac
