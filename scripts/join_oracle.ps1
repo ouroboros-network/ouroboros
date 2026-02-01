@@ -31,7 +31,7 @@ Write-Host "   Architecture: $arch" -ForegroundColor Gray
 Write-Host ""
 
 # Download the latest release binary
-$downloadUrl = "https://github.com/ipswyworld/ouroboros/releases/latest/download/$binaryName"
+$downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/latest/download/$binaryName"
 $outputPath = "$installDir\ouro-oracle.exe"
 
 try {
@@ -68,7 +68,7 @@ try {
         Remove-Item -Recurse -Force ouroboros
     }
 
-    git clone https://github.com/ipswyworld/ouroboros.git
+    git clone https://github.com/ouroboros-network/ouroboros.git
     Set-Location ouroboros\ouro_dag
 
     cargo build --release --bin ouro-node -j 2

@@ -15,13 +15,13 @@ Welcome! This guide will help you join the Ouroboros blockchain network as a nod
 ### Linux / Mac
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/njorojoe/ouroboros/main/join_ouroboros.sh | bash
+curl -sSL https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.sh | bash
 ```
 
 Or download and run manually:
 
 ```bash
-wget https://raw.githubusercontent.com/njorojoe/ouroboros/main/join_ouroboros.sh
+wget https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.sh
 chmod +x join_ouroboros.sh
 ./join_ouroboros.sh
 ```
@@ -29,7 +29,7 @@ chmod +x join_ouroboros.sh
 ### Windows
 
 1. **Download PowerShell script:**
-   - Go to: https://raw.githubusercontent.com/njorojoe/ouroboros/main/join_ouroboros.ps1
+   - Go to: https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.ps1
    - Right-click → Save As → `join_ouroboros.ps1`
 
 2. **Run as Administrator:**
@@ -72,7 +72,7 @@ source $HOME/.cargo/env
 ### 3. Clone Repository
 
 ```bash
-git clone https://github.com/njorojoe/ouroboros.git
+git clone https://github.com/ouroboros-network/ouroboros.git
 cd ouroboros/ouro_dag
 ```
 
@@ -266,7 +266,7 @@ The blockchain grows over time. Ensure you have at least 20GB free space initial
 
 ## Getting Help
 
-- **GitHub Issues:** https://github.com/njorojoe/ouroboros/issues
+- **GitHub Issues:** https://github.com/ouroboros-network/ouroboros/issues
 - **Check seed node status:** `curl http://34.173.167.150:8001/health`
 
 ## Contributing

@@ -11,7 +11,7 @@ A decentralized blockchain network with lightweight nodes and transparent reward
 ### Linux / macOS
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ipswyworld/ouroboros/main/join_ouroboros.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/ipswyworld/ouroboros/main/scripts/join_ouroboros.sh)
 ```
 
 ### Windows (PowerShell as Administrator)
@@ -19,7 +19,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ipswyworld/ouroboros/main/jo
 Open PowerShell (not Command Prompt) as Administrator, then run:
 
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/ipswyworld/ouroboros/main/join_ouroboros.ps1 | Invoke-Expression
+Invoke-WebRequest https://raw.githubusercontent.com/ipswyworld/ouroboros/main/scripts/join_ouroboros.ps1 | Invoke-Expression
 ```
 
 **That's it!** Your node will automatically:
@@ -168,7 +168,7 @@ curl http://localhost:8001/metrics/YOUR_ADDRESS
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/ipswyworld/ouroboros/issues)
+- **Issues**: [GitHub Issues](https://github.com/ouroboros-network/ouroboros/issues)
 - **Network Stats**: Check `/metrics/leaderboard` endpoint
 - **Updates**: Watch this repo for new releases
 
