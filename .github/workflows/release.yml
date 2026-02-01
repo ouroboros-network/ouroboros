@@ -34,28 +34,6 @@ jobs:
           name: ouro_dag-linux-x64
           path: ouro_dag/target/release/ouro_dag-linux-x64
 
-  build-linux-arm64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-      - name: Build with cross
-        run: |
-          cd ouro_dag
-          cross build --release --bin ouro_dag --target aarch64-unknown-linux-gnu
-      - name: Package
-        run: |
-          cd ouro_dag/target/aarch64-unknown-linux-gnu/release
-          cp ouro_dag ouro_dag-linux-arm64
-          chmod +x ouro_dag-linux-arm64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ouro_dag-linux-arm64
-          path: ouro_dag/target/aarch64-unknown-linux-gnu/release/ouro_dag-linux-arm64
-
   build-macos-x64:
     runs-on: macos-14  # Cross-compile from ARM64 Mac
     steps:
@@ -120,7 +98,7 @@ jobs:
           path: ouro_dag/target/release/ouro_dag-windows-x64.exe
 
   release:
-    needs: [build-linux-x64, build-linux-arm64, build-macos-x64, build-macos-arm64, build-windows-x64]
+    needs: [build-linux-x64, build-macos-x64, build-macos-arm64, build-windows-x64]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -137,7 +115,6 @@ jobs:
         with:
           files: |
             artifacts/ouro_dag-linux-x64/ouro_dag-linux-x64
-            artifacts/ouro_dag-linux-arm64/ouro_dag-linux-arm64
             artifacts/ouro_dag-macos-x64/ouro_dag-macos-x64
             artifacts/ouro_dag-macos-arm64/ouro_dag-macos-arm64
             artifacts/ouro_dag-windows-x64/ouro_dag-windows-x64.exe
