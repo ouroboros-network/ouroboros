@@ -63,7 +63,7 @@ fi
 echo "Cloning Ouroboros repository..."
 cd /opt
 if [ ! -d "ouroboros" ]; then
-    git clone https://github.com/ipswyworld/ouroboros.git
+    git clone https://github.com/ouroboros-network/ouroboros.git
 else
     cd ouroboros
     git pull origin main

@@ -118,7 +118,7 @@ fi
 # Clone repository
 cd /opt
 if [ ! -d "ouroboros" ]; then
-    git clone https://github.com/ipswyworld/ouroboros.git
+    git clone https://github.com/ouroboros-network/ouroboros.git
 fi
 cd ouroboros
 git pull
