@@ -897,7 +897,7 @@ pub async fn run() -> std::io::Result<()> {
                 let update_config_path_arc = Arc::new(update_config_path_str.clone());
 
                 let app = Router::new()
-                    .route("/health", get(|| async { "OK" }))
+                    .route("/health", get(|| async { Json(serde_json::json!({"status": "ok", "node_name": "lightweight-node"})) }))
                     .route("/", get(|| async { "Ouroboros Lightweight Node v0.3.0" }))
                     // Node Identity endpoints
                     .route("/identity", get({
@@ -1052,6 +1052,11 @@ pub async fn run() -> std::io::Result<()> {
 
                             Ok::<Json<auto_update::UpdateConfig>, StatusCode>(Json(cfg.clone()))
                         }
+                    }))
+                    // Peers endpoint for lightweight node - return empty array for now
+                    // (peer_store lock can cause deadlock in lightweight mode)
+                    .route("/peers", get(|| async {
+                        Json(serde_json::json!([]))
                     }));
 
                 println!("\n Lightweight node running!");
