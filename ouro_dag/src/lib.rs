@@ -885,7 +885,7 @@ pub async fn run() -> std::io::Result<()> {
                     })?;
 
                 // Create router with v0.3.0 API endpoints
-                use axum::{extract::State, http::StatusCode, response::Json};
+                use axum::{extract::State, http::StatusCode, response::Json, Extension};
 
                 // Prepare shared state for API handlers
                 let identity_arc = Arc::new(Mutex::new(identity));
@@ -896,14 +896,40 @@ pub async fn run() -> std::io::Result<()> {
                 let update_config_for_api = update_config_arc.clone();
                 let update_config_path_arc = Arc::new(update_config_path_str.clone());
 
+                // Track node start time for uptime calculation
+                let node_start_time = std::time::Instant::now();
+                let node_start_time_arc = Arc::new(node_start_time);
+
+                // Spawn background task to periodically update uptime in identity file
+                {
+                    let identity_clone = identity_arc.clone();
+                    let identity_path_clone = identity_path_str.clone();
+                    let start_time = node_start_time_arc.clone();
+                    tokio::spawn(async move {
+                        let mut interval = tokio::time::interval(Duration::from_secs(60)); // Update every minute
+                        loop {
+                            interval.tick().await;
+                            let elapsed_secs = start_time.elapsed().as_secs();
+                            let mut id = identity_clone.lock().await;
+                            id.total_uptime_secs = elapsed_secs;
+                            if let Err(e) = id.save(Path::new(&identity_path_clone)) {
+                                eprintln!(" Failed to save identity uptime: {}", e);
+                            }
+                        }
+                    });
+                }
+
                 let app = Router::new()
                     .route("/health", get(|| async { Json(serde_json::json!({"status": "ok", "node_name": "lightweight-node"})) }))
                     .route("/", get(|| async { "Ouroboros Lightweight Node v0.3.0" }))
                     // Node Identity endpoints
                     .route("/identity", get({
                         let identity = identity_arc.clone();
+                        let start_time = node_start_time_arc.clone();
                         move || async move {
-                            let id = identity.lock().await;
+                            let mut id = identity.lock().await;
+                            // Update uptime with current session time
+                            id.total_uptime_secs = start_time.elapsed().as_secs();
                             Json(id.clone())
                         }
                     }))
@@ -1053,11 +1079,55 @@ pub async fn run() -> std::io::Result<()> {
                             Ok::<Json<auto_update::UpdateConfig>, StatusCode>(Json(cfg.clone()))
                         }
                     }))
-                    // Peers endpoint for lightweight node - return empty array for now
-                    // (peer_store lock can cause deadlock in lightweight mode)
-                    .route("/peers", get(|| async {
-                        Json(serde_json::json!([]))
-                    }));
+                    // Peers endpoint for lightweight node
+                    .route("/peers", get(get_lightweight_peers))
+                    // Metrics endpoint for TPS and network stats
+                    .route("/metrics", get(get_lightweight_metrics));
+
+                // Handler for /peers endpoint - read from peers.json file to avoid lock contention
+                async fn get_lightweight_peers() -> Json<serde_json::Value> {
+                    // Read peers from the saved file instead of the locked peer_store
+                    // Use platform-specific home directory
+                    let home = if cfg!(windows) {
+                        std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string())
+                    } else {
+                        std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())
+                    };
+                    let peers_path = std::path::PathBuf::from(home).join(".ouroboros").join("peers.json");
+
+                    if let Ok(content) = tokio::fs::read_to_string(&peers_path).await {
+                        if let Ok(peers) = serde_json::from_str::<Vec<crate::network::PeerEntry>>(&content) {
+                            let peer_list: Vec<serde_json::Value> = peers.iter().map(|entry| {
+                                serde_json::json!({
+                                    "id": entry.addr.replace(":", "-"),
+                                    "addr": entry.addr,
+                                    "latency_ms": 50,
+                                    "failures": entry.failures,
+                                    "last_seen": entry.last_seen_unix
+                                })
+                            }).collect();
+                            return Json(serde_json::json!({
+                                "count": peer_list.len(),
+                                "peers": peer_list
+                            }));
+                        }
+                    }
+                    Json(serde_json::json!({"count": 0, "peers": []}))
+                }
+
+                // Handler for /metrics endpoint - return basic metrics for lightweight node
+                async fn get_lightweight_metrics() -> Json<serde_json::Value> {
+                    // For lightweight nodes, we return placeholder metrics
+                    // TPS would need to be tracked from actual transaction processing
+                    Json(serde_json::json!({
+                        "tps_1m": 0.0,
+                        "tps_5m": 0.0,
+                        "mempool_count": 0,
+                        "block_height": 0,
+                        "network_tip": 0,
+                        "sync_percent": 100.0
+                    }))
+                }
 
                 println!("\n Lightweight node running!");
                 println!("   P2P: {}", listen);
@@ -1624,6 +1694,29 @@ async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
                         latency_ms: p.get("latency_ms").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
                     })
                 }).collect();
+            }
+        }
+
+        // Fetch metrics (TPS, block height, etc.)
+        if let Ok(metrics) = fetch_api::<serde_json::Value>(&format!("{}/metrics", api)).await {
+            if let Some(tps) = metrics.get("tps_1m").and_then(|v| v.as_f64()) {
+                data.tps_1m = tps;
+            }
+            if let Some(tps) = metrics.get("tps_5m").and_then(|v| v.as_f64()) {
+                data.tps_5m = tps;
+            }
+            if let Some(count) = metrics.get("mempool_count").and_then(|v| v.as_u64()) {
+                data.mempool_tx_count = count as u32;
+            }
+            if let Some(height) = metrics.get("block_height").and_then(|v| v.as_u64()) {
+                data.local_height = height;
+                data.last_block_height = height;
+            }
+            if let Some(tip) = metrics.get("network_tip").and_then(|v| v.as_u64()) {
+                data.network_tip = tip;
+            }
+            if let Some(sync) = metrics.get("sync_percent").and_then(|v| v.as_f64()) {
+                data.sync_percent = sync;
             }
         }
 

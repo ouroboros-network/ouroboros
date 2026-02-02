@@ -5,6 +5,40 @@
 
 use std::io::{self, Write};
 
+/// Enable ANSI escape codes on Windows
+#[cfg(windows)]
+pub fn enable_ansi_support() {
+    use std::os::windows::io::AsRawHandle;
+    const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
+
+    unsafe {
+        let handle = std::io::stdout().as_raw_handle();
+        let mut mode: u32 = 0;
+        if winapi_GetConsoleMode(handle, &mut mode) != 0 {
+            winapi_SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, lpMode: *mut u32) -> i32;
+        fn SetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, dwMode: u32) -> i32;
+    }
+
+    unsafe fn winapi_GetConsoleMode(handle: *mut std::ffi::c_void, mode: *mut u32) -> i32 {
+        GetConsoleMode(handle, mode)
+    }
+
+    unsafe fn winapi_SetConsoleMode(handle: *mut std::ffi::c_void, mode: u32) -> i32 {
+        SetConsoleMode(handle, mode)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn enable_ansi_support() {
+    // ANSI is supported by default on Unix
+}
+
 /// ANSI color codes
 pub mod colors {
     pub const RESET: &str = "\x1b[0m";
@@ -252,8 +286,12 @@ pub fn horizontal_line(width: usize) -> String {
 pub fn print_dashboard(data: &DashboardData) {
     let width = 70;
 
+    // Enable ANSI support on Windows
+    enable_ansi_support();
+
     // Clear screen and move cursor to top
     print!("\x1b[2J\x1b[H");
+    let _ = io::stdout().flush();
 
     // Header
     println!(
