@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 use super::transaction::Transaction;
+#[allow(deprecated)]
 use super::validation::validate_transaction_legacy;
 use std::fs::File;
 use std::io::Write;

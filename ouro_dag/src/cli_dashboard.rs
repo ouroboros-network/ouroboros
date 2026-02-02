@@ -7,17 +7,10 @@ use std::io::{self, Write};
 
 /// Enable ANSI escape codes on Windows
 #[cfg(windows)]
+#[allow(non_snake_case)]
 pub fn enable_ansi_support() {
     use std::os::windows::io::AsRawHandle;
     const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
-
-    unsafe {
-        let handle = std::io::stdout().as_raw_handle();
-        let mut mode: u32 = 0;
-        if winapi_GetConsoleMode(handle, &mut mode) != 0 {
-            winapi_SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-    }
 
     #[link(name = "kernel32")]
     extern "system" {
@@ -25,12 +18,12 @@ pub fn enable_ansi_support() {
         fn SetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, dwMode: u32) -> i32;
     }
 
-    unsafe fn winapi_GetConsoleMode(handle: *mut std::ffi::c_void, mode: *mut u32) -> i32 {
-        GetConsoleMode(handle, mode)
-    }
-
-    unsafe fn winapi_SetConsoleMode(handle: *mut std::ffi::c_void, mode: u32) -> i32 {
-        SetConsoleMode(handle, mode)
+    unsafe {
+        let handle = std::io::stdout().as_raw_handle();
+        let mut mode: u32 = 0;
+        if GetConsoleMode(handle as *mut _, &mut mode) != 0 {
+            SetConsoleMode(handle as *mut _, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
     }
 }
 
