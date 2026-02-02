@@ -53,7 +53,7 @@ echo ""
 # Create directories
 mkdir -p "$NODE_DIR" "$DATA_DIR"
 
-# Download binary
+# Step 1: Download binary
 echo "[1/4] Downloading Ouroboros node..."
 DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/latest/download/$BINARY_NAME"
 
@@ -94,42 +94,120 @@ else
     cd "$NODE_DIR"
 fi
 
-# Configure node
-echo "[2/4] Configuring node..."
-SEED_NODE="${OUROBOROS_SEED:-136.112.101.176:9001}"
+echo ""
 
-# Generate BFT secret seed if not exists
-if [ -f "$NODE_DIR/.env" ] && grep -q "BFT_SECRET_SEED" "$NODE_DIR/.env"; then
-    echo "      Using existing configuration"
-    source "$NODE_DIR/.env"
-else
-    BFT_SECRET_SEED=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
-    NODE_ID="node-$(openssl rand -hex 4 2>/dev/null || head -c 8 /dev/urandom | xxd -p | tr -d '\n')"
-    echo "      Generated new node identity: $NODE_ID"
+# Step 2: Stop existing node if running
+echo "[2/4] Checking for existing node..."
+if pgrep -f "ouro-bin" > /dev/null 2>&1; then
+    echo "      Stopping existing node..."
+    pkill -f "ouro-bin" 2>/dev/null || true
+    sleep 2
 fi
 
-# Generate API key for local access
-API_KEY=$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\n')
+# Remove stale lock file if exists
+if [ -f "$DATA_DIR/LOCK" ]; then
+    rm -f "$DATA_DIR/LOCK" 2>/dev/null || true
+fi
 
-cat > "$NODE_DIR/.env" <<EOF
+# Step 3: Configure node
+echo "[3/4] Configuring node..."
+
+# Use consistent ports: API=8000, P2P=9000
+SEED_NODE="${OUROBOROS_SEED:-136.112.101.176:9000}"
+
+# Check if existing config has required keys
+NEEDS_NEW_CONFIG=true
+if [ -f "$NODE_DIR/.env" ]; then
+    if grep -q "API_KEYS=" "$NODE_DIR/.env" && grep -q "BFT_SECRET_SEED=" "$NODE_DIR/.env"; then
+        echo "      Using existing configuration"
+        NEEDS_NEW_CONFIG=false
+    else
+        echo "      Upgrading configuration (adding required keys)..."
+    fi
+fi
+
+if [ "$NEEDS_NEW_CONFIG" = true ]; then
+    # Generate secrets
+    BFT_SECRET_SEED=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
+    NODE_ID="node-$(openssl rand -hex 4 2>/dev/null || head -c 8 /dev/urandom | xxd -p | tr -d '\n')"
+    API_KEY=$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\n')
+
+    echo "      Generated new node identity: $NODE_ID"
+
+    # Save to .env file - USE CONSISTENT PORTS: API=8000, P2P=9000
+    cat > "$NODE_DIR/.env" <<EOF
+# Ouroboros Node Configuration
 DATABASE_PATH=$DATA_DIR
-API_ADDRESS=0.0.0.0:8000
 API_ADDR=0.0.0.0:8000
-P2P_ADDRESS=0.0.0.0:9001
 LISTEN_ADDR=0.0.0.0:9000
 PEER_ADDRS=$SEED_NODE
-BFT_SECRET_SEED=${BFT_SECRET_SEED}
-NODE_ID=${NODE_ID:-node-$(openssl rand -hex 4 2>/dev/null || echo "default")}
-API_KEYS=${API_KEY}
+NODE_ID=$NODE_ID
+BFT_SECRET_SEED=$BFT_SECRET_SEED
+API_KEYS=$API_KEY
 RUST_LOG=info
 EOF
+fi
 
-echo "      Data directory: $DATA_DIR"
+echo "      API Port: 8000"
+echo "      P2P Port: 9000"
 echo "      Seed node: $SEED_NODE"
 
-# Setup auto-start (platform-specific)
-echo "[3/4] Setting up auto-start..."
+# Step 4: Setup scripts and services
+echo "[4/4] Setting up scripts..."
 
+# Create wrapper script that loads environment (main 'ouro' command)
+cat > "$NODE_DIR/ouro" <<'WRAPPER'
+#!/bin/bash
+OURO_DIR="$HOME/.ouroboros"
+if [ -f "$OURO_DIR/.env" ]; then
+    set -a
+    source "$OURO_DIR/.env"
+    set +a
+fi
+exec "$OURO_DIR/ouro-bin" "$@"
+WRAPPER
+chmod +x "$NODE_DIR/ouro"
+
+# Create start script
+cat > "$NODE_DIR/start.sh" <<EOF
+#!/bin/bash
+set -a
+source $NODE_DIR/.env
+set +a
+exec $NODE_DIR/ouro-bin start
+EOF
+chmod +x "$NODE_DIR/start.sh"
+
+# Create stop script
+cat > "$NODE_DIR/stop.sh" <<'EOF'
+#!/bin/bash
+echo "Stopping Ouroboros node..."
+if pkill -f "ouro-bin"; then
+    echo "Node stopped successfully."
+else
+    echo "No running node found."
+fi
+EOF
+chmod +x "$NODE_DIR/stop.sh"
+
+# Create symlinks
+if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
+    ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
+elif command -v sudo &> /dev/null; then
+    sudo ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
+fi
+mkdir -p "$HOME/.local/bin"
+ln -sf "$NODE_DIR/ouro" "$HOME/.local/bin/ouro" 2>/dev/null || true
+
+# Add to shell profile if not already there
+for profile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+    if [ -f "$profile" ] && ! grep -q "\.ouroboros" "$profile" 2>/dev/null; then
+        echo 'export PATH="$HOME/.ouroboros:$HOME/.local/bin:$PATH"' >> "$profile"
+    fi
+done
+export PATH="$NODE_DIR:$HOME/.local/bin:$PATH"
+
+# Setup auto-start (platform-specific)
 if [ "$OS" = "Linux" ] && command -v systemctl &> /dev/null; then
     # Linux with systemd
     sudo tee /etc/systemd/system/ouroboros.service > /dev/null <<EOF
@@ -151,7 +229,7 @@ WantedBy=multi-user.target
 EOF
 
     sudo systemctl daemon-reload
-    sudo systemctl enable ouroboros.service
+    sudo systemctl enable ouroboros.service 2>/dev/null || true
     echo "      Systemd service configured"
 
 elif [ "$OS" = "Darwin" ]; then
@@ -166,24 +244,8 @@ elif [ "$OS" = "Darwin" ]; then
     <string>network.ouroboros.node</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$NODE_DIR/ouro</string>
-        <string>join</string>
-        <string>--peer</string>
-        <string>$SEED_NODE</string>
-        <string>--storage</string>
-        <string>rocksdb</string>
-        <string>--rocksdb-path</string>
-        <string>$DATA_DIR</string>
+        <string>$NODE_DIR/start.sh</string>
     </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>DATABASE_PATH</key>
-        <string>$DATA_DIR</string>
-        <key>API_ADDRESS</key>
-        <string>0.0.0.0:8001</string>
-        <key>P2P_ADDRESS</key>
-        <string>0.0.0.0:9001</string>
-    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -196,62 +258,17 @@ elif [ "$OS" = "Darwin" ]; then
 </plist>
 EOF
     echo "      LaunchAgent configured"
-else
-    echo "      Manual start required (no systemd/launchd)"
 fi
 
-# Add ouro to PATH
-echo "[4/4] Setting up CLI..."
-
-# Create wrapper script that loads environment (this becomes the main 'ouro' command)
-cat > "$NODE_DIR/ouro" <<'WRAPPER'
-#!/bin/bash
-OURO_DIR="$HOME/.ouroboros"
-if [ -f "$OURO_DIR/.env" ]; then
-    set -a
-    source "$OURO_DIR/.env"
-    set +a
-fi
-exec "$OURO_DIR/ouro-bin" "$@"
-WRAPPER
-chmod +x "$NODE_DIR/ouro"
-
-# Create symlinks to the wrapper
-if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
-    ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
-elif command -v sudo &> /dev/null; then
-    sudo ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
-fi
-mkdir -p "$HOME/.local/bin"
-ln -sf "$NODE_DIR/ouro" "$HOME/.local/bin/ouro" 2>/dev/null || true
-
-# Add to shell profile if not already there
-if ! grep -q "\.ouroboros" "$HOME/.bashrc" 2>/dev/null; then
-    echo 'export PATH="$HOME/.ouroboros:$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-fi
-if ! grep -q "\.ouroboros" "$HOME/.zshrc" 2>/dev/null; then
-    echo 'export PATH="$HOME/.ouroboros:$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc" 2>/dev/null || true
-fi
-export PATH="$NODE_DIR:$HOME/.local/bin:$PATH"
-
-# Create helper script
-cat > "$NODE_DIR/start.sh" <<EOF
-#!/bin/bash
-set -a
-source $NODE_DIR/.env
-set +a
-$NODE_DIR/ouro-bin start
-EOF
-chmod +x "$NODE_DIR/start.sh"
-
-# Start node
 echo ""
 echo "Starting Ouroboros node..."
 
+# Start node
 if [ "$OS" = "Linux" ] && command -v systemctl &> /dev/null; then
-    sudo systemctl start ouroboros
+    sudo systemctl start ouroboros 2>/dev/null || true
     sleep 3
 elif [ "$OS" = "Darwin" ]; then
+    launchctl unload ~/Library/LaunchAgents/network.ouroboros.node.plist 2>/dev/null || true
     launchctl load ~/Library/LaunchAgents/network.ouroboros.node.plist 2>/dev/null || true
     sleep 3
 else
@@ -267,32 +284,42 @@ if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
     echo "  Node started successfully!"
     echo "=========================================="
     echo ""
-    echo "API: http://localhost:8000"
-    echo "Data: $DATA_DIR"
+    echo "  Seed node: $SEED_NODE"
+    echo "  API: http://localhost:8000"
+    echo "  Data: $DATA_DIR"
     echo ""
-    echo "CLI Commands:"
-    echo "  $NODE_DIR/ouro status    - Dashboard"
-    echo "  $NODE_DIR/ouro peers     - Connected peers"
-    echo "  $NODE_DIR/ouro diagnose  - Run diagnostics"
+    echo "Commands:"
+    echo "  ouro status     - View node dashboard"
+    echo "  ouro peers      - List connected peers"
+    echo "  ouro diagnose   - Run diagnostics"
     echo ""
-    if [ "$OS" = "Linux" ]; then
-        echo "Service Commands:"
-        echo "  sudo systemctl status ouroboros"
-        echo "  sudo systemctl stop ouroboros"
-        echo "  sudo systemctl restart ouroboros"
+    echo "Management:"
+    if [ "$OS" = "Linux" ] && command -v systemctl &> /dev/null; then
+        echo "  sudo systemctl status ouroboros  - Check status"
+        echo "  sudo systemctl stop ouroboros    - Stop node"
+        echo "  sudo systemctl restart ouroboros - Restart node"
     elif [ "$OS" = "Darwin" ]; then
-        echo "Service Commands:"
-        echo "  launchctl list | grep ouroboros"
-        echo "  launchctl unload ~/Library/LaunchAgents/network.ouroboros.node.plist"
+        echo "  $NODE_DIR/stop.sh   - Stop node"
+        echo "  $NODE_DIR/start.sh  - Start node"
+    else
+        echo "  $NODE_DIR/stop.sh   - Stop node"
+        echo "  $NODE_DIR/start.sh  - Start node"
     fi
     echo ""
-    echo "Logs: tail -f $NODE_DIR/node.log"
+    echo "Logs:"
+    echo "  tail -f $NODE_DIR/node.log"
     echo ""
     echo "You're now part of the Ouroboros network!"
     echo "=========================================="
 else
     echo "Warning: Node may still be starting..."
-    echo "Check status: $NODE_DIR/ouro status"
+    echo ""
+    echo "Check status: ouro status"
     echo "Check logs: tail -f $NODE_DIR/node.log"
+    echo ""
+    if [ -f "$NODE_DIR/node.log" ]; then
+        echo "=== Recent Log ==="
+        tail -20 "$NODE_DIR/node.log" 2>/dev/null || true
+    fi
 fi
 echo ""

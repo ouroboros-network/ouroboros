@@ -21,25 +21,24 @@ switch ($arch) {
 # Create installation directory
 $installDir = "$env:USERPROFILE\.ouroboros"
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-Set-Location $installDir
+New-Item -ItemType Directory -Force -Path "$installDir\data" | Out-Null
 
-Write-Host "Downloading Ouroboros node..." -ForegroundColor Yellow
-Write-Host "   Architecture: $arch" -ForegroundColor Gray
-Write-Host ""
+Write-Host "[1/4] Downloading Ouroboros node..." -ForegroundColor Yellow
+Write-Host "      Architecture: $arch" -ForegroundColor Gray
 
 # Download the latest release binary
 $downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/latest/download/$binaryName"
 $outputPath = "$installDir\ouro-bin.exe"
 
 try {
-    Write-Host "   Downloading from GitHub releases..." -ForegroundColor Gray
+    Write-Host "      Downloading from GitHub releases..." -ForegroundColor Gray
     Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
     if (-not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -lt 1000000) {
         throw "Download incomplete or file too small"
     }
-    Write-Host "Binary downloaded successfully" -ForegroundColor Green
+    Write-Host "      Binary downloaded successfully" -ForegroundColor Green
 } catch {
-    Write-Host "Download failed - building from source..." -ForegroundColor Yellow
+    Write-Host "      Download failed - building from source..." -ForegroundColor Yellow
     Write-Host ""
 
     # Check dependencies
@@ -74,99 +73,129 @@ try {
 
 Write-Host ""
 
-# Get seed node address
-$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9001" }
+# Stop any existing node process first
+Write-Host "[2/4] Checking for existing node..." -ForegroundColor Yellow
+$existingProcess = Get-Process -Name "ouro-bin" -ErrorAction SilentlyContinue
+if ($existingProcess) {
+    Write-Host "      Stopping existing node (PID: $($existingProcess.Id))..." -ForegroundColor Gray
+    $existingProcess | Stop-Process -Force
+    Start-Sleep -Seconds 2
+}
 
-# Create data directory
-New-Item -ItemType Directory -Force -Path "$installDir\data" | Out-Null
+# Remove stale lock file if exists
+$lockFile = "$installDir\data\LOCK"
+if (Test-Path $lockFile) {
+    Remove-Item -Force $lockFile -ErrorAction SilentlyContinue
+}
 
-# Generate or load BFT secret seed
+# Configuration
+Write-Host "[3/4] Configuring node..." -ForegroundColor Yellow
+$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9000" }
 $envFile = "$installDir\.env"
+
+# Check if existing config has required keys
+$needsNewConfig = $true
 if (Test-Path $envFile) {
-    Write-Host "   Using existing configuration" -ForegroundColor Gray
-    Get-Content $envFile | ForEach-Object {
-        if ($_ -match "^([^=]+)=(.*)$") {
-            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
-        }
+    $envContent = Get-Content $envFile -Raw
+    if ($envContent -match "API_KEYS=" -and $envContent -match "BFT_SECRET_SEED=") {
+        Write-Host "      Using existing configuration" -ForegroundColor Gray
+        $needsNewConfig = $false
+    } else {
+        Write-Host "      Upgrading configuration (adding required keys)..." -ForegroundColor Gray
     }
-} else {
+}
+
+if ($needsNewConfig) {
     # Generate random secrets
     $bftSecret = -join ((1..64) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
     $nodeId = "node-" + -join ((1..8) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
     $apiKey = -join ((1..32) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
-    Write-Host "   Generated new node identity: $nodeId" -ForegroundColor Gray
+    Write-Host "      Generated new node identity: $nodeId" -ForegroundColor Gray
 
-    # Save to .env file
+    # Save to .env file - USE CONSISTENT PORTS: API=8000, P2P=9000
     @"
+# Ouroboros Node Configuration
 DATABASE_PATH=$installDir\data
-API_ADDRESS=0.0.0.0:8000
 API_ADDR=0.0.0.0:8000
-P2P_ADDRESS=0.0.0.0:9001
 LISTEN_ADDR=0.0.0.0:9000
 PEER_ADDRS=$seedNode
-BFT_SECRET_SEED=$bftSecret
 NODE_ID=$nodeId
+BFT_SECRET_SEED=$bftSecret
 API_KEYS=$apiKey
 RUST_LOG=info
 "@ | Out-File -FilePath $envFile -Encoding ASCII
 }
 
-# Load environment from .env
+# Load environment variables for current session
 Get-Content $envFile | ForEach-Object {
-    if ($_ -match "^([^=]+)=(.*)$") {
-        $name = $matches[1]
-        $value = $matches[2]
+    if ($_ -match "^([^#][^=]+)=(.*)$") {
+        $name = $matches[1].Trim()
+        $value = $matches[2].Trim()
         [Environment]::SetEnvironmentVariable($name, $value, "Process")
-        [Environment]::SetEnvironmentVariable($name, $value, "User")
     }
 }
 
-Write-Host "Configuration:" -ForegroundColor Yellow
-Write-Host "   Storage: RocksDB (lightweight, no database needed)" -ForegroundColor Gray
-Write-Host "   Data directory: $installDir\data" -ForegroundColor Gray
-Write-Host "   Seed node: $seedNode" -ForegroundColor Gray
-Write-Host ""
+Write-Host "      API Port: 8000" -ForegroundColor Gray
+Write-Host "      P2P Port: 9000" -ForegroundColor Gray
+Write-Host "      Seed node: $seedNode" -ForegroundColor Gray
 
-# Create batch file for easy management
-$batchContent = @"
+# Create helper scripts
+Write-Host "[4/4] Creating helper scripts..." -ForegroundColor Yellow
+
+# Create start script
+@"
 @echo off
 cd /d "$installDir"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
+    echo %%a | findstr /r "^#" >nul || set "%%a=%%b"
+)
 ouro-bin.exe start
-"@
-$batchContent | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
+"@ | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
 
 # Create status script
-$statusContent = @"
+@"
 @echo off
 cd /d "$installDir"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
+    echo %%a | findstr /r "^#" >nul || set "%%a=%%b"
+)
 ouro-bin.exe status
-"@
-$statusContent | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
+"@ | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
 
-# Create wrapper batch file for ouro command (main entry point)
-$wrapperBat = @"
+# Create stop script
+@"
+@echo off
+echo Stopping Ouroboros node...
+taskkill /IM ouro-bin.exe /F 2>nul
+if %ERRORLEVEL% EQU 0 (
+    echo Node stopped successfully.
+) else (
+    echo No running node found.
+)
+"@ | Out-File -FilePath "$installDir\stop-node.bat" -Encoding ASCII
+
+# Create wrapper batch file for ouro command
+@"
 @echo off
 cd /d "$installDir"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
+    echo %%a | findstr /r "^#" >nul || set "%%a=%%b"
+)
 "$installDir\ouro-bin.exe" %*
-"@
-$wrapperBat | Out-File -FilePath "$installDir\ouro.bat" -Encoding ASCII
+"@ | Out-File -FilePath "$installDir\ouro.bat" -Encoding ASCII
 
-# Also create PowerShell wrapper
-$wrapperPs1 = @'
+# Create PowerShell wrapper
+@'
 $envFile = "$env:USERPROFILE\.ouroboros\.env"
 if (Test-Path $envFile) {
     Get-Content $envFile | ForEach-Object {
-        if ($_ -match "^([^=]+)=(.*)$") {
-            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+        if ($_ -match "^([^#][^=]+)=(.*)$") {
+            [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), "Process")
         }
     }
 }
 & "$env:USERPROFILE\.ouroboros\ouro-bin.exe" $args
-'@
-$wrapperPs1 | Out-File -FilePath "$installDir\ouro.ps1" -Encoding UTF8
+'@ | Out-File -FilePath "$installDir\ouro.ps1" -Encoding UTF8
 
 # Add to PATH
 $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -175,40 +204,86 @@ if ($currentPath -notlike "*$installDir*") {
     $env:Path = "$installDir;$env:Path"
 }
 
+Write-Host ""
 Write-Host "Starting Ouroboros node..." -ForegroundColor Yellow
 
-# Start the node in background
-$processArgs = "start"
+# Start the node with environment variables properly set
+$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+$startInfo.FileName = $outputPath
+$startInfo.Arguments = "start"
+$startInfo.WorkingDirectory = $installDir
+$startInfo.UseShellExecute = $false
+$startInfo.RedirectStandardOutput = $true
+$startInfo.RedirectStandardError = $true
+$startInfo.CreateNoWindow = $true
 
-# Start process and capture it
-$nodeProcess = Start-Process -FilePath $outputPath -ArgumentList $processArgs -PassThru -WindowStyle Hidden -RedirectStandardOutput "$installDir\node.log" -RedirectStandardError "$installDir\node_error.log"
+# Add environment variables to the process
+Get-Content $envFile | ForEach-Object {
+    if ($_ -match "^([^#][^=]+)=(.*)$") {
+        $startInfo.EnvironmentVariables[$matches[1].Trim()] = $matches[2].Trim()
+    }
+}
+
+$nodeProcess = New-Object System.Diagnostics.Process
+$nodeProcess.StartInfo = $startInfo
+$nodeProcess.Start() | Out-Null
+
+# Save output to log files asynchronously
+$outputJob = Start-Job -ScriptBlock {
+    param($proc, $logPath)
+    $proc.StandardOutput.ReadToEnd() | Out-File $logPath
+} -ArgumentList $nodeProcess, "$installDir\node.log"
+
+$errorJob = Start-Job -ScriptBlock {
+    param($proc, $logPath)
+    $proc.StandardError.ReadToEnd() | Out-File $logPath
+} -ArgumentList $nodeProcess, "$installDir\node_error.log"
 
 Write-Host "   Node started with PID: $($nodeProcess.Id)" -ForegroundColor Gray
 
+# Wait for node to initialize
 Start-Sleep -Seconds 5
 
-# Check if still running
-$process = Get-Process -Id $nodeProcess.Id -ErrorAction SilentlyContinue
-if ($process) {
+# Check if node is running and API is responding
+$nodeRunning = -not $nodeProcess.HasExited
+$apiResponding = $false
+
+if ($nodeRunning) {
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        $apiResponding = $true
+    } catch {
+        # API might still be starting up
+        Start-Sleep -Seconds 3
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            $apiResponding = $true
+        } catch {}
+    }
+}
+
+if ($nodeRunning) {
     Write-Host ""
     Write-Host "==========================================" -ForegroundColor Green
-    Write-Host "Node started successfully!" -ForegroundColor Green
+    Write-Host "  Node started successfully!" -ForegroundColor Green
     Write-Host "==========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Connected to: $seedNode" -ForegroundColor Cyan
-    Write-Host "Storage: RocksDB" -ForegroundColor Cyan
-    Write-Host "Data directory: $installDir\data" -ForegroundColor Cyan
+    Write-Host "  Seed node: $seedNode" -ForegroundColor Cyan
+    Write-Host "  API: http://localhost:8000" -ForegroundColor Cyan
+    Write-Host "  Data: $installDir\data" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Commands:" -ForegroundColor Yellow
-    Write-Host "   Status:    $installDir\status.bat" -ForegroundColor White
-    Write-Host "   Logs:      Get-Content $installDir\node.log -Tail 50 -Wait" -ForegroundColor White
-    Write-Host "   Restart:   $installDir\start-node.bat" -ForegroundColor White
-    Write-Host "   Stop:      Get-Process ouro | Stop-Process" -ForegroundColor White
+    Write-Host "  ouro status     - View node dashboard" -ForegroundColor White
+    Write-Host "  ouro peers      - List connected peers" -ForegroundColor White
+    Write-Host "  ouro diagnose   - Run diagnostics" -ForegroundColor White
     Write-Host ""
-    Write-Host "CLI commands:" -ForegroundColor Yellow
-    Write-Host "   $installDir\ouro-bin.exe status" -ForegroundColor White
-    Write-Host "   $installDir\ouro-bin.exe peers" -ForegroundColor White
-    Write-Host "   $installDir\ouro-bin.exe diagnose" -ForegroundColor White
+    Write-Host "Management:" -ForegroundColor Yellow
+    Write-Host "  $installDir\stop-node.bat   - Stop the node" -ForegroundColor White
+    Write-Host "  $installDir\start-node.bat  - Start the node" -ForegroundColor White
+    Write-Host "  $installDir\status.bat      - Quick status check" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Logs:" -ForegroundColor Yellow
+    Write-Host "  Get-Content $installDir\node.log -Tail 50 -Wait" -ForegroundColor White
     Write-Host ""
     Write-Host "You're now part of the Ouroboros network!" -ForegroundColor Green
     Write-Host "==========================================" -ForegroundColor Green
@@ -216,6 +291,10 @@ if ($process) {
     Write-Host ""
     Write-Host "Error: Node stopped unexpectedly" -ForegroundColor Red
     Write-Host ""
+
+    # Wait for jobs to complete and get output
+    Wait-Job $outputJob, $errorJob -Timeout 5 | Out-Null
+
     Write-Host "=== Error Log ===" -ForegroundColor Yellow
     if (Test-Path "$installDir\node_error.log") {
         Get-Content "$installDir\node_error.log" -Tail 20
@@ -226,9 +305,6 @@ if ($process) {
         Get-Content "$installDir\node.log" -Tail 20
     }
     Write-Host ""
-    Write-Host "To run manually: $installDir\ouro-bin.exe join --peer $seedNode --storage rocksdb --rocksdb-path `"$installDir\data`"" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "Press any key to exit..."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host "Try running manually: $installDir\start-node.bat" -ForegroundColor Cyan
     exit 1
 }
