@@ -57,8 +57,8 @@ mkdir -p "$NODE_DIR" "$DATA_DIR"
 echo "[1/4] Downloading Ouroboros node..."
 DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/latest/download/$BINARY_NAME"
 
-if curl -sL "$DOWNLOAD_URL" -o "$NODE_DIR/ouro" 2>/dev/null; then
-    chmod +x "$NODE_DIR/ouro"
+if curl -sL "$DOWNLOAD_URL" -o "$NODE_DIR/ouro-bin" 2>/dev/null; then
+    chmod +x "$NODE_DIR/ouro-bin"
     echo "      Binary downloaded successfully"
 else
     echo "      Download failed - building from source..."
@@ -89,8 +89,8 @@ else
     git clone https://github.com/ouroboros-network/ouroboros.git
     cd ouroboros/ouro_dag
     cargo build --release --bin ouro_dag
-    cp target/release/ouro_dag "$NODE_DIR/ouro"
-    chmod +x "$NODE_DIR/ouro"
+    cp target/release/ouro_dag "$NODE_DIR/ouro-bin"
+    chmod +x "$NODE_DIR/ouro-bin"
     cd "$NODE_DIR"
 fi
 
@@ -142,7 +142,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$NODE_DIR
 EnvironmentFile=$NODE_DIR/.env
-ExecStart=$NODE_DIR/ouro start
+ExecStart=$NODE_DIR/ouro-bin start
 Restart=always
 RestartSec=10
 
@@ -203,8 +203,8 @@ fi
 # Add ouro to PATH
 echo "[4/4] Setting up CLI..."
 
-# Create wrapper script that loads environment
-cat > "$NODE_DIR/ouro-cli" <<'WRAPPER'
+# Create wrapper script that loads environment (this becomes the main 'ouro' command)
+cat > "$NODE_DIR/ouro" <<'WRAPPER'
 #!/bin/bash
 OURO_DIR="$HOME/.ouroboros"
 if [ -f "$OURO_DIR/.env" ]; then
@@ -212,18 +212,18 @@ if [ -f "$OURO_DIR/.env" ]; then
     source "$OURO_DIR/.env"
     set +a
 fi
-exec "$OURO_DIR/ouro" "$@"
+exec "$OURO_DIR/ouro-bin" "$@"
 WRAPPER
-chmod +x "$NODE_DIR/ouro-cli"
+chmod +x "$NODE_DIR/ouro"
 
-# Create symlinks
+# Create symlinks to the wrapper
 if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
-    ln -sf "$NODE_DIR/ouro-cli" "/usr/local/bin/ouro" 2>/dev/null || true
+    ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
 elif command -v sudo &> /dev/null; then
-    sudo ln -sf "$NODE_DIR/ouro-cli" "/usr/local/bin/ouro" 2>/dev/null || true
+    sudo ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
 fi
 mkdir -p "$HOME/.local/bin"
-ln -sf "$NODE_DIR/ouro-cli" "$HOME/.local/bin/ouro" 2>/dev/null || true
+ln -sf "$NODE_DIR/ouro" "$HOME/.local/bin/ouro" 2>/dev/null || true
 
 # Add to shell profile if not already there
 if ! grep -q "\.ouroboros" "$HOME/.bashrc" 2>/dev/null; then
@@ -240,7 +240,7 @@ cat > "$NODE_DIR/start.sh" <<EOF
 set -a
 source $NODE_DIR/.env
 set +a
-$NODE_DIR/ouro start
+$NODE_DIR/ouro-bin start
 EOF
 chmod +x "$NODE_DIR/start.sh"
 

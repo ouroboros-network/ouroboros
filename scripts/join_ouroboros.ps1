@@ -29,7 +29,7 @@ Write-Host ""
 
 # Download the latest release binary
 $downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/latest/download/$binaryName"
-$outputPath = "$installDir\ouro.exe"
+$outputPath = "$installDir\ouro-bin.exe"
 
 try {
     Write-Host "   Downloading from GitHub releases..." -ForegroundColor Gray
@@ -129,7 +129,7 @@ $batchContent = @"
 @echo off
 cd /d "$installDir"
 for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
-ouro.exe start
+ouro-bin.exe start
 "@
 $batchContent | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
 
@@ -138,12 +138,21 @@ $statusContent = @"
 @echo off
 cd /d "$installDir"
 for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
-ouro.exe status
+ouro-bin.exe status
 "@
 $statusContent | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
 
-# Create wrapper PowerShell script for ouro command
-$wrapperContent = @'
+# Create wrapper batch file for ouro command (main entry point)
+$wrapperBat = @"
+@echo off
+cd /d "$installDir"
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
+"$installDir\ouro-bin.exe" %*
+"@
+$wrapperBat | Out-File -FilePath "$installDir\ouro.bat" -Encoding ASCII
+
+# Also create PowerShell wrapper
+$wrapperPs1 = @'
 $envFile = "$env:USERPROFILE\.ouroboros\.env"
 if (Test-Path $envFile) {
     Get-Content $envFile | ForEach-Object {
@@ -152,9 +161,16 @@ if (Test-Path $envFile) {
         }
     }
 }
-& "$env:USERPROFILE\.ouroboros\ouro.exe" $args
+& "$env:USERPROFILE\.ouroboros\ouro-bin.exe" $args
 '@
-$wrapperContent | Out-File -FilePath "$installDir\ouro-cli.ps1" -Encoding UTF8
+$wrapperPs1 | Out-File -FilePath "$installDir\ouro.ps1" -Encoding UTF8
+
+# Add to PATH
+$currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($currentPath -notlike "*$installDir*") {
+    [Environment]::SetEnvironmentVariable("Path", "$installDir;$currentPath", "User")
+    $env:Path = "$installDir;$env:Path"
+}
 
 Write-Host "Starting Ouroboros node..." -ForegroundColor Yellow
 
@@ -187,9 +203,9 @@ if ($process) {
     Write-Host "   Stop:      Get-Process ouro | Stop-Process" -ForegroundColor White
     Write-Host ""
     Write-Host "CLI commands:" -ForegroundColor Yellow
-    Write-Host "   $installDir\ouro.exe status" -ForegroundColor White
-    Write-Host "   $installDir\ouro.exe peers" -ForegroundColor White
-    Write-Host "   $installDir\ouro.exe diagnose" -ForegroundColor White
+    Write-Host "   $installDir\ouro-bin.exe status" -ForegroundColor White
+    Write-Host "   $installDir\ouro-bin.exe peers" -ForegroundColor White
+    Write-Host "   $installDir\ouro-bin.exe diagnose" -ForegroundColor White
     Write-Host ""
     Write-Host "You're now part of the Ouroboros network!" -ForegroundColor Green
     Write-Host "==========================================" -ForegroundColor Green
@@ -207,7 +223,7 @@ if ($process) {
         Get-Content "$installDir\node.log" -Tail 20
     }
     Write-Host ""
-    Write-Host "To run manually: $installDir\ouro.exe join --peer $seedNode --storage rocksdb --rocksdb-path `"$installDir\data`"" -ForegroundColor Cyan
+    Write-Host "To run manually: $installDir\ouro-bin.exe join --peer $seedNode --storage rocksdb --rocksdb-path `"$installDir\data`"" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Press any key to exit..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
