@@ -207,48 +207,21 @@ if ($currentPath -notlike "*$installDir*") {
 Write-Host ""
 Write-Host "Starting Ouroboros node..." -ForegroundColor Yellow
 
-# Start the node with environment variables properly set
-$startInfo = New-Object System.Diagnostics.ProcessStartInfo
-$startInfo.FileName = $outputPath
-$startInfo.Arguments = "start"
-$startInfo.WorkingDirectory = $installDir
-$startInfo.UseShellExecute = $false
-$startInfo.RedirectStandardOutput = $true
-$startInfo.RedirectStandardError = $true
-$startInfo.CreateNoWindow = $true
-
-# Add environment variables to the process
-Get-Content $envFile | ForEach-Object {
-    if ($_ -match "^([^#][^=]+)=(.*)$") {
-        $startInfo.EnvironmentVariables[$matches[1].Trim()] = $matches[2].Trim()
-    }
-}
-
-$nodeProcess = New-Object System.Diagnostics.Process
-$nodeProcess.StartInfo = $startInfo
-$nodeProcess.Start() | Out-Null
-
-# Save output to log files asynchronously
-$outputJob = Start-Job -ScriptBlock {
-    param($proc, $logPath)
-    $proc.StandardOutput.ReadToEnd() | Out-File $logPath
-} -ArgumentList $nodeProcess, "$installDir\node.log"
-
-$errorJob = Start-Job -ScriptBlock {
-    param($proc, $logPath)
-    $proc.StandardError.ReadToEnd() | Out-File $logPath
-} -ArgumentList $nodeProcess, "$installDir\node_error.log"
+# Start the node using cmd.exe to run the batch file (ensures env vars are loaded)
+$nodeProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$installDir\start-node.bat`"" -WorkingDirectory $installDir -PassThru -WindowStyle Hidden -RedirectStandardOutput "$installDir\node.log" -RedirectStandardError "$installDir\node_error.log"
 
 Write-Host "   Node started with PID: $($nodeProcess.Id)" -ForegroundColor Gray
 
 # Wait for node to initialize
 Start-Sleep -Seconds 5
 
-# Check if node is running and API is responding
-$nodeRunning = -not $nodeProcess.HasExited
+# Check if node is running by looking for ouro-bin process
+$ouroProcess = Get-Process -Name "ouro-bin" -ErrorAction SilentlyContinue
+$nodeRunning = $null -ne $ouroProcess
 $apiResponding = $false
 
 if ($nodeRunning) {
+    # Try to connect to API
     try {
         $response = Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
         $apiResponding = $true
@@ -291,9 +264,6 @@ if ($nodeRunning) {
     Write-Host ""
     Write-Host "Error: Node stopped unexpectedly" -ForegroundColor Red
     Write-Host ""
-
-    # Wait for jobs to complete and get output
-    Wait-Job $outputJob, $errorJob -Timeout 5 | Out-Null
 
     Write-Host "=== Error Log ===" -ForegroundColor Yellow
     if (Test-Path "$installDir\node_error.log") {
