@@ -1,10 +1,10 @@
 // src/microchain/store.rs
-use serde::{Serialize, Deserialize};
-use rocksdb::{DB, Options, ColumnFamilyDescriptor};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use anyhow::Result;
+use chrono::{DateTime, Utc};
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MicroHeader {
@@ -20,8 +20,7 @@ pub struct MicroStore {
 
 impl MicroStore {
     pub fn open(name: &str) -> Result<Self> {
-        let base_path = std::env::var("ROCKSDB_PATH")
-            .unwrap_or_else(|_| "rocksdb_data".into());
+        let base_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "rocksdb_data".into());
         // Use sibling path, not nested subdirectory
         let p = format!("{}_microchain_{}", base_path, name);
 
@@ -44,13 +43,16 @@ impl MicroStore {
         let key = hdr.id.as_bytes();
         let v = serde_json::to_vec(hdr)?;
         self.db.put_cf(cf_headers, key, v)?;
-        self.db.put_cf(cf_by_height, hdr.height.to_be_bytes(), hdr.id.as_bytes())?;
+        self.db
+            .put_cf(cf_by_height, hdr.height.to_be_bytes(), hdr.id.as_bytes())?;
         Ok(())
     }
 
     pub fn tip(&self) -> Result<Option<MicroHeader>> {
         let cf_by_height = self.db.cf_handle("by_height").unwrap();
-        let iter = self.db.iterator_cf(cf_by_height, rocksdb::IteratorMode::End);
+        let iter = self
+            .db
+            .iterator_cf(cf_by_height, rocksdb::IteratorMode::End);
 
         if let Some(Ok((_, v))) = iter.take(1).next() {
             let id = uuid::Uuid::from_slice(&v)?;
@@ -66,7 +68,7 @@ impl MicroStore {
                 let h: MicroHeader = serde_json::from_slice(&v)?;
                 Ok(Some(h))
             }
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 }

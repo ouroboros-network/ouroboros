@@ -8,7 +8,7 @@ use uuid::Uuid;
 fn substore_put_batch_and_get() {
     let name = format!("test_sub_{}", Uuid::new_v4());
     let store = SubStore::open(&name).expect("open");
-    let root = vec![0u8;32];
+    let root = vec![0u8; 32];
     let rec = crate::subchain::store::BatchRecord {
         batch_root: root.clone(),
         aggregator: "agg1".into(),

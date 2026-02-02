@@ -53,10 +53,12 @@ mod token_tests {
                 ));
             }
 
-            self.balances.insert(from.to_string(), sender_balance - amount);
+            self.balances
+                .insert(from.to_string(), sender_balance - amount);
 
             let recipient_balance = *self.balances.get(to).unwrap_or(&0);
-            self.balances.insert(to.to_string(), recipient_balance + amount);
+            self.balances
+                .insert(to.to_string(), recipient_balance + amount);
 
             Ok(())
         }
@@ -85,7 +87,10 @@ mod token_tests {
                 .unwrap_or(&0);
 
             if allowance < amount {
-                return Err(format!("Insufficient allowance: {} < {}", allowance, amount));
+                return Err(format!(
+                    "Insufficient allowance: {} < {}",
+                    allowance, amount
+                ));
             }
 
             // Check balance
@@ -113,7 +118,10 @@ mod token_tests {
             let balance = *self.balances.get(from).unwrap_or(&0);
 
             if balance < amount {
-                return Err(format!("Insufficient balance to burn: {} < {}", balance, amount));
+                return Err(format!(
+                    "Insufficient balance to burn: {} < {}",
+                    balance, amount
+                ));
             }
 
             self.balances.insert(from.to_string(), balance - amount);
@@ -416,11 +424,11 @@ mod token_tests {
         }
 
         let gas = GasEstimate {
-            mint: 30_000,         // Storage write + balance update
-            transfer: 25_000,     // Two balance updates
-            approve: 20_000,      // Allowance storage write
+            mint: 30_000,          // Storage write + balance update
+            transfer: 25_000,      // Two balance updates
+            approve: 20_000,       // Allowance storage write
             transfer_from: 35_000, // Allowance check + two balance updates
-            burn: 25_000,         // Balance update + supply decrease
+            burn: 25_000,          // Balance update + supply decrease
         };
 
         // Verify all operations are under 50k gas

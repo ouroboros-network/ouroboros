@@ -11,7 +11,7 @@ fn microstore_put_get_tip() {
         id: Uuid::new_v4(),
         height: 1,
         timestamp: chrono::Utc::now(),
-        leaf_hash: vec![1,2,3],
+        leaf_hash: vec![1, 2, 3],
     };
     store.put_header(&hdr).expect("put");
     let tip = store.tip().expect("tip");

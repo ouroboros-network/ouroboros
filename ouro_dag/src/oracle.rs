@@ -1,12 +1,12 @@
 // Decentralized Oracle Network (own implementation, not Chainlink)
 // Provides real-world data feeds for smart contracts
 
-use serde::{Serialize, Deserialize};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
-use sha2::{Sha256, Digest};
-use ed25519_dalek::{SigningKey, Signature, VerifyingKey, Signer, Verifier};
+use tokio::sync::RwLock;
 
 /// Data feed (e.g., price, weather, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct AggregatedFeed {
     pub feed_id: String,
     pub value: Vec<u8>,
     pub confidence: f64, // 0.0 to 1.0
-    pub consensus: f64, // 0.0 to 1.0 (for bridge verification)
+    pub consensus: f64,  // 0.0 to 1.0 (for bridge verification)
     pub num_submissions: usize,
     pub num_validators: usize, // Number of unique validators
     pub total_stake: u64,
@@ -75,7 +75,10 @@ impl OracleManager {
     pub async fn submit_data(&self, submission: OracleSubmission) -> Result<(), String> {
         // Verify stake
         if submission.stake < self.min_stake {
-            return Err(format!("Insufficient stake: {} < {}", submission.stake, self.min_stake));
+            return Err(format!(
+                "Insufficient stake: {} < {}",
+                submission.stake, self.min_stake
+            ));
         }
 
         // Verify signature
@@ -85,7 +88,8 @@ impl OracleManager {
 
         // Get validator public key
         let pubkeys = self.validator_pubkeys.read().await;
-        let pubkey = pubkeys.get(&submission.validator)
+        let pubkey = pubkeys
+            .get(&submission.validator)
             .ok_or("Validator not registered")?;
 
         // Create message to verify: feed_id + value + timestamp + validator + stake
@@ -97,11 +101,15 @@ impl OracleManager {
         message.extend_from_slice(&submission.stake.to_le_bytes());
 
         // Verify signature
-        let sig_bytes: [u8; 64] = submission.signature.clone().try_into()
+        let sig_bytes: [u8; 64] = submission
+            .signature
+            .clone()
+            .try_into()
             .map_err(|_| "Invalid signature format")?;
         let signature = Signature::from_bytes(&sig_bytes);
 
-        pubkey.verify(&message, &signature)
+        pubkey
+            .verify(&message, &signature)
             .map_err(|_| "Signature verification failed")?;
 
         // Add to pending submissions
@@ -117,8 +125,7 @@ impl OracleManager {
     pub async fn aggregate_feed(&self, feed_id: &str) -> Result<AggregatedFeed, String> {
         let mut subs = self.submissions.write().await;
 
-        let submissions = subs.get_mut(feed_id)
-            .ok_or("No submissions for feed")?;
+        let submissions = subs.get_mut(feed_id).ok_or("No submissions for feed")?;
 
         if submissions.is_empty() {
             return Err("No submissions".to_string());
@@ -134,7 +141,8 @@ impl OracleManager {
         }
 
         // Find value with highest stake
-        let (consensus_value, consensus_stake) = value_stakes.iter()
+        let (consensus_value, consensus_stake) = value_stakes
+            .iter()
             .max_by_key(|(_, stake)| *stake)
             .ok_or("No consensus")?;
 
@@ -182,7 +190,9 @@ impl OracleManager {
 
     /// Get aggregated feed (alias for compatibility)
     pub async fn get_aggregated_feed(&self, feed_id: &str) -> Result<AggregatedFeed, String> {
-        self.get_feed(feed_id).await.ok_or_else(|| "Feed not found".to_string())
+        self.get_feed(feed_id)
+            .await
+            .ok_or_else(|| "Feed not found".to_string())
     }
 }
 
@@ -210,10 +220,7 @@ impl PriceFeed {
     pub fn new(manager: Arc<OracleManager>, pair: &str) -> Self {
         let feed_id = format!("price_{}", pair);
 
-        Self {
-            manager,
-            feed_id,
-        }
+        Self { manager, feed_id }
     }
 
     /// Get current price
@@ -284,7 +291,9 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
 
         // Register validator
-        oracle.register_validator("validator1".to_string(), verifying_key).await;
+        oracle
+            .register_validator("validator1".to_string(), verifying_key)
+            .await;
 
         // Create signed submission
         let feed_id = "price_BTC_USD".to_string();
@@ -327,7 +336,9 @@ mod tests {
             let validator_id = format!("validator{}", i);
 
             // Register validator
-            oracle.register_validator(validator_id.clone(), verifying_key).await;
+            oracle
+                .register_validator(validator_id.clone(), verifying_key)
+                .await;
 
             // Create signed submission
             let feed_id = "price_ETH_USD".to_string();
@@ -374,14 +385,29 @@ mod tests {
         let key3 = SigningKey::generate(&mut csprng);
 
         // Register validators
-        oracle.register_validator("val1".to_string(), key1.verifying_key()).await;
-        oracle.register_validator("val2".to_string(), key2.verifying_key()).await;
-        oracle.register_validator("val3".to_string(), key3.verifying_key()).await;
+        oracle
+            .register_validator("val1".to_string(), key1.verifying_key())
+            .await;
+        oracle
+            .register_validator("val2".to_string(), key2.verifying_key())
+            .await;
+        oracle
+            .register_validator("val3".to_string(), key3.verifying_key())
+            .await;
 
         // Submit prices
-        price_feed.submit_price(50000, "val1".to_string(), 3000, &key1).await.unwrap();
-        price_feed.submit_price(50000, "val2".to_string(), 3000, &key2).await.unwrap();
-        price_feed.submit_price(50100, "val3".to_string(), 1000, &key3).await.unwrap();
+        price_feed
+            .submit_price(50000, "val1".to_string(), 3000, &key1)
+            .await
+            .unwrap();
+        price_feed
+            .submit_price(50000, "val2".to_string(), 3000, &key2)
+            .await
+            .unwrap();
+        price_feed
+            .submit_price(50100, "val3".to_string(), 1000, &key3)
+            .await
+            .unwrap();
 
         // Aggregate
         oracle.aggregate_feed("price_BTC_USD").await.unwrap();

@@ -1,11 +1,11 @@
 // src/network/dht_integration.rs
 // Integration of DHT with existing P2P network
 
-use super::dht::{Kademlia, DhtPeer, NodeId};
+use super::dht::{DhtPeer, Kademlia, NodeId};
 use super::PeerEntry;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 /// DHT-enabled P2P network manager
 pub struct DhtNetworkManager {
@@ -54,7 +54,8 @@ impl DhtNetworkManager {
         let all_peers = self.dht.find_closest(&my_id, count + 1).await; // Get extra to account for self
 
         // Filter out ourselves from the peer list
-        let peers: Vec<_> = all_peers.into_iter()
+        let peers: Vec<_> = all_peers
+            .into_iter()
             .filter(|p| p.node_id != my_id)
             .take(count)
             .collect();

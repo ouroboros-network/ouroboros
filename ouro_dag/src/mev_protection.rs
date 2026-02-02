@@ -1,11 +1,11 @@
 // MEV (Maximal Extractable Value) Protection
 // Prevents front-running and transaction reordering attacks
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
-use tokio::sync::RwLock;
 use std::sync::Arc;
-use sha2::{Sha256, Digest};
+use tokio::sync::RwLock;
 
 /// Transaction commitment (encrypted)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,11 +63,14 @@ impl MevProtection {
 
         let now = current_unix_time();
 
-        commits.insert(tx_hash, TxCommitment {
-            commitment,
-            timestamp: now,
-            signature,
-        });
+        commits.insert(
+            tx_hash,
+            TxCommitment {
+                commitment,
+                timestamp: now,
+                signature,
+            },
+        );
 
         Ok(())
     }
@@ -90,8 +93,7 @@ impl MevProtection {
         let tx_hash = hash_data(&tx_data);
 
         // Check if commitment exists (without removing yet)
-        let commit_data = commits.get(&tx_hash)
-            .ok_or("No commitment found")?;
+        let commit_data = commits.get(&tx_hash).ok_or("No commitment found")?;
 
         // Check if enough time has passed BEFORE removing
         let now = current_unix_time();
@@ -134,9 +136,7 @@ impl MevProtection {
         let mut commits = self.commitments.write().await;
         let now = current_unix_time();
 
-        commits.retain(|_, commit| {
-            now - commit.timestamp < max_age_secs
-        });
+        commits.retain(|_, commit| now - commit.timestamp < max_age_secs);
     }
 }
 
@@ -226,11 +226,9 @@ impl FairGasAuction {
         let mut bids = self.bids.write().await;
 
         // Sort by: 1) timestamp (earlier first), 2) gas price
-        bids.sort_by(|a, b| {
-            match a.timestamp.cmp(&b.timestamp) {
-                std::cmp::Ordering::Equal => b.gas_price.cmp(&a.gas_price),
-                other => other,
-            }
+        bids.sort_by(|a, b| match a.timestamp.cmp(&b.timestamp) {
+            std::cmp::Ordering::Equal => b.gas_price.cmp(&a.gas_price),
+            other => other,
         });
 
         bids.iter()
@@ -275,17 +273,23 @@ mod tests {
         let tx_hash = hash_data(&tx_data);
 
         // Commit
-        mev.commit_transaction(tx_hash.clone(), commitment.clone(), vec![]).await.unwrap();
+        mev.commit_transaction(tx_hash.clone(), commitment.clone(), vec![])
+            .await
+            .unwrap();
 
         // Try to reveal immediately (should fail)
-        let result = mev.reveal_transaction(commitment.clone(), tx_data.clone(), nonce.clone()).await;
+        let result = mev
+            .reveal_transaction(commitment.clone(), tx_data.clone(), nonce.clone())
+            .await;
         assert!(result.is_err());
 
         // Wait for commit window
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
         // Now reveal should work
-        mev.reveal_transaction(commitment, tx_data, nonce).await.unwrap();
+        mev.reveal_transaction(commitment, tx_data, nonce)
+            .await
+            .unwrap();
 
         // Check revealed transaction
         let batch = mev.get_next_batch(10).await;

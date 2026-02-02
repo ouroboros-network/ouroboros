@@ -1,5 +1,5 @@
 // Dynamic fee market (EIP-1559 style)
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeeMarket {
@@ -43,7 +43,10 @@ impl FeeMarket {
         }
 
         if max_fee < self.base_fee {
-            return Err(format!("Max fee {} below base fee {}", max_fee, self.base_fee));
+            return Err(format!(
+                "Max fee {} below base fee {}",
+                max_fee, self.base_fee
+            ));
         }
 
         Ok(())

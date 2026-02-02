@@ -6,73 +6,77 @@
 // Replaces PostgreSQL PgPool throughout the codebase
 pub type PgPool = std::sync::Arc<storage::RocksDb>;
 
-pub mod microchain;
-pub mod escrow;
+pub mod account_abstraction;
 pub mod alerts;
 pub mod api;
-pub mod simple_metrics;
 pub mod batch_writer;
-pub mod rewards;
-pub mod zk_proofs;
-pub mod zk_integration;
-pub mod tail_emission;
-pub mod ring_signatures;
-pub mod stealth_addresses;
-pub mod mev_protection;
-pub mod vrf;
-pub mod account_abstraction;
-pub mod light_client;
-pub mod oracle;
-pub mod oracle_subchain;
-pub mod oracle_node;
-pub mod oracle_relay;
-pub mod oracle_data_sources;
-pub mod oracle_fetchers;
-pub mod indexer;
-pub mod bridge;
-pub mod staking;
-pub mod fee_market;
 pub mod bft;
+pub mod bridge;
 pub mod config;
 pub mod crypto;
 pub mod dag;
+pub mod escrow;
+pub mod fee_market;
+pub mod indexer;
 pub mod keys;
+pub mod light_client;
 pub mod mempool;
 pub mod merkle;
+pub mod mev_protection;
+pub mod microchain;
 pub mod network;
+pub mod oracle;
+pub mod oracle_data_sources;
+pub mod oracle_fetchers;
+pub mod oracle_node;
+pub mod oracle_relay;
+pub mod oracle_subchain;
+pub mod rewards;
+pub mod ring_signatures;
+pub mod simple_metrics;
+pub mod staking;
+pub mod stealth_addresses;
+pub mod tail_emission;
+pub mod vrf;
+pub mod zk_integration;
+pub mod zk_proofs;
 // TODO_ROCKSDB: Re-enable when converted to RocksDB
 // pub mod node_metrics; // Node tracking and rewards system
+pub mod backup;
 pub mod reconciliation;
-pub mod storage;      // New storage abstraction layer
-pub mod backup;       // Database backup and recovery
-// TODO_ROCKSDB: Re-enable when converted
-// pub mod sled_storage; // Old sled-based helpers (legacy)
-pub mod mainchain;
+pub mod storage; // New storage abstraction layer // Database backup and recovery
+                                                  // TODO_ROCKSDB: Re-enable when converted
+                                                  // pub mod sled_storage; // Old sled-based helpers (legacy)
 pub mod anchor_service;
-pub mod subchain;
 pub mod controller;
+pub mod mainchain;
 pub mod ouro_coin;
+pub mod subchain;
 // TODO_ROCKSDB: Re-enable when converted to RocksDB
 // pub mod token_bucket;
-pub mod tor;
+pub mod auto_update; // v0.3.0 - Automatic update checking
+pub mod cli_dashboard; // v0.3.0 - CLI dashboard for monitoring
+pub mod light_node_rewards;
 pub mod multisig;
-pub mod vm;
+pub mod node_identity; // v0.3.0 - Node identity management
 pub mod peer_discovery;
+pub mod tor;
 pub mod validator_registration;
-pub mod node_identity;   // v0.3.0 - Node identity management
-pub mod wallet_link;     // v0.3.0 - Wallet linking with dual signatures
-pub mod auto_update;     // v0.3.0 - Automatic update checking
-pub mod cli_dashboard;   // v0.3.0 - CLI dashboard for monitoring
-pub mod light_node_rewards; // v0.3.0 - Reputation & storage rewards for light nodes
+pub mod vm;
+pub mod wallet_link; // v0.3.0 - Wallet linking with dual signatures // v0.3.0 - Reputation & storage rewards for light nodes
 
 use crate::reconciliation::finalize_block;
 
 use crate::crypto::verify_ed25519_hex;
 
+use crate::storage::{batch_put, open_db, put, RocksDb};
+use axum::{
+    routing::{delete, get, post},
+    Router,
+};
 use bft::consensus::{BFTNode, HotStuff, HotStuffConfig};
 use bft::state::BFTState;
 use bft::validator_registry::ValidatorRegistry;
-use network::bft_msg::{start_bft_server, BroadcastHandle};
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use dag::dag::DAG;
@@ -80,23 +84,22 @@ use dag::transaction::Transaction;
 use dotenvy;
 use hex;
 use mempool::Mempool;
+use network::bft_msg::{start_bft_server, BroadcastHandle};
 use network::{start_network, TxBroadcast};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::error::Error;
 use std::fs;
+use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use crate::storage::{batch_put, open_db, put, RocksDb};
-use uuid::Uuid;
-use axum::{Router, routing::{get, post, delete}};
-use rustls_pemfile::{certs, pkcs8_private_keys};
-use std::io::BufReader;
 use tokio_rustls::rustls;
 use tokio_rustls::rustls::{Certificate, PrivateKey};
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct IncomingFileTxn {
@@ -120,26 +123,24 @@ pub fn check_required_keys() -> anyhow::Result<KeyStatus> {
 
     // 1. BFT_SECRET_SEED - REQUIRED for validators
     match std::env::var("BFT_SECRET_SEED") {
-        Ok(seed_hex) => {
-            match hex::decode(&seed_hex) {
-                Ok(bytes) => {
-                    if bytes.len() != 32 {
-                        errors.push(format!(
-                            "BFT_SECRET_SEED must be 64 hex characters (32 bytes), got {} bytes",
-                            bytes.len()
-                        ));
-                    }
-                    if bytes.iter().all(|&b| b == 0) {
-                        errors.push(
+        Ok(seed_hex) => match hex::decode(&seed_hex) {
+            Ok(bytes) => {
+                if bytes.len() != 32 {
+                    errors.push(format!(
+                        "BFT_SECRET_SEED must be 64 hex characters (32 bytes), got {} bytes",
+                        bytes.len()
+                    ));
+                }
+                if bytes.iter().all(|&b| b == 0) {
+                    errors.push(
                             "BFT_SECRET_SEED is all zeros - NOT SECURE! Generate with: openssl rand -hex 32".to_string()
                         );
-                    }
-                }
-                Err(_) => {
-                    errors.push("BFT_SECRET_SEED is not valid hex".to_string());
                 }
             }
-        }
+            Err(_) => {
+                errors.push("BFT_SECRET_SEED is not valid hex".to_string());
+            }
+        },
         Err(_) => {
             errors.push(
                 "BFT_SECRET_SEED not set - REQUIRED for production. Generate with: openssl rand -hex 32".to_string()
@@ -150,7 +151,7 @@ pub fn check_required_keys() -> anyhow::Result<KeyStatus> {
     // 2. TLS Certificate - warn if missing (optional but recommended)
     if std::env::var("TLS_CERT_PATH").is_err() {
         warnings.push(
-            "TLS_CERT_PATH not set - running HTTP only (insecure for production)".to_string()
+            "TLS_CERT_PATH not set - running HTTP only (insecure for production)".to_string(),
         );
         warnings.push(
             "Generate self-signed cert with: openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes".to_string()
@@ -164,9 +165,8 @@ pub fn check_required_keys() -> anyhow::Result<KeyStatus> {
 
     // 4. NODE_WALLET_ADDRESS - warn if missing (needed for rewards)
     if std::env::var("NODE_WALLET_ADDRESS").is_err() {
-        warnings.push(
-            "NODE_WALLET_ADDRESS not set - node will not receive block rewards".to_string()
-        );
+        warnings
+            .push("NODE_WALLET_ADDRESS not set - node will not receive block rewards".to_string());
     }
 
     // If there are critical errors, fail startup
@@ -176,7 +176,10 @@ pub fn check_required_keys() -> anyhow::Result<KeyStatus> {
             eprintln!("  [ERROR] {}", error);
         }
         eprintln!("===================================\n");
-        return Err(anyhow::anyhow!("Missing required keys: {}", errors.join("; ")));
+        return Err(anyhow::anyhow!(
+            "Missing required keys: {}",
+            errors.join("; ")
+        ));
     }
 
     Ok(KeyStatus { warnings })
@@ -281,7 +284,10 @@ pub fn load_tls_config() -> Option<axum_server::tls_rustls::RustlsConfig> {
     let cert_file = match std::fs::File::open(&cert_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("  Failed to open TLS cert '{}': {} - running without TLS", cert_path, e);
+            eprintln!(
+                "  Failed to open TLS cert '{}': {} - running without TLS",
+                cert_path, e
+            );
             return None;
         }
     };
@@ -289,7 +295,10 @@ pub fn load_tls_config() -> Option<axum_server::tls_rustls::RustlsConfig> {
     let cert_chain = match certs(&mut cert_reader) {
         Ok(certs) => certs.into_iter().map(|c| Certificate(c)).collect(),
         Err(e) => {
-            eprintln!("  Failed to parse TLS cert '{}': {} - running without TLS", cert_path, e);
+            eprintln!(
+                "  Failed to parse TLS cert '{}': {} - running without TLS",
+                cert_path, e
+            );
             return None;
         }
     };
@@ -298,7 +307,10 @@ pub fn load_tls_config() -> Option<axum_server::tls_rustls::RustlsConfig> {
     let key_file = match std::fs::File::open(&key_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("  Failed to open TLS key '{}': {} - running without TLS", key_path, e);
+            eprintln!(
+                "  Failed to open TLS key '{}': {} - running without TLS",
+                key_path, e
+            );
             return None;
         }
     };
@@ -306,13 +318,19 @@ pub fn load_tls_config() -> Option<axum_server::tls_rustls::RustlsConfig> {
     let mut keys = match pkcs8_private_keys(&mut key_reader) {
         Ok(keys) => keys,
         Err(e) => {
-            eprintln!("  Failed to parse TLS key '{}': {} - running without TLS", key_path, e);
+            eprintln!(
+                "  Failed to parse TLS key '{}': {} - running without TLS",
+                key_path, e
+            );
             return None;
         }
     };
 
     if keys.is_empty() {
-        eprintln!("  No private keys found in '{}' - running without TLS", key_path);
+        eprintln!(
+            "  No private keys found in '{}' - running without TLS",
+            key_path
+        );
         return None;
     }
 
@@ -371,7 +389,10 @@ pub fn load_p2p_tls_config() -> Option<Arc<rustls::ServerConfig>> {
     let cert_file = match std::fs::File::open(&cert_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("  Failed to open P2P TLS cert '{}': {} - using plain TCP", cert_path, e);
+            eprintln!(
+                "  Failed to open P2P TLS cert '{}': {} - using plain TCP",
+                cert_path, e
+            );
             return None;
         }
     };
@@ -379,7 +400,10 @@ pub fn load_p2p_tls_config() -> Option<Arc<rustls::ServerConfig>> {
     let cert_chain = match certs(&mut cert_reader) {
         Ok(certs) => certs.into_iter().map(|c| Certificate(c)).collect(),
         Err(e) => {
-            eprintln!("  Failed to parse P2P TLS cert '{}': {} - using plain TCP", cert_path, e);
+            eprintln!(
+                "  Failed to parse P2P TLS cert '{}': {} - using plain TCP",
+                cert_path, e
+            );
             return None;
         }
     };
@@ -388,7 +412,10 @@ pub fn load_p2p_tls_config() -> Option<Arc<rustls::ServerConfig>> {
     let key_file = match std::fs::File::open(&key_path) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("  Failed to open P2P TLS key '{}': {} - using plain TCP", key_path, e);
+            eprintln!(
+                "  Failed to open P2P TLS key '{}': {} - using plain TCP",
+                key_path, e
+            );
             return None;
         }
     };
@@ -396,13 +423,19 @@ pub fn load_p2p_tls_config() -> Option<Arc<rustls::ServerConfig>> {
     let mut keys = match pkcs8_private_keys(&mut key_reader) {
         Ok(keys) => keys,
         Err(e) => {
-            eprintln!("  Failed to parse P2P TLS key '{}': {} - using plain TCP", key_path, e);
+            eprintln!(
+                "  Failed to parse P2P TLS key '{}': {} - using plain TCP",
+                key_path, e
+            );
             return None;
         }
     };
 
     if keys.is_empty() {
-        eprintln!("  No private keys found in '{}' - using plain TCP", key_path);
+        eprintln!(
+            "  No private keys found in '{}' - using plain TCP",
+            key_path
+        );
         return None;
     }
 
@@ -467,7 +500,9 @@ pub fn load_p2p_client_tls_config() -> Option<Arc<rustls::ClientConfig>> {
     }
 
     // Try to load CA certificates
-    let ca_path = std::env::var("P2P_TLS_CA_PATH").ok().filter(|p| !p.is_empty());
+    let ca_path = std::env::var("P2P_TLS_CA_PATH")
+        .ok()
+        .filter(|p| !p.is_empty());
 
     let mut root_store = rustls::RootCertStore::empty();
 
@@ -476,7 +511,10 @@ pub fn load_p2p_client_tls_config() -> Option<Arc<rustls::ClientConfig>> {
         let ca_file = match std::fs::File::open(&ca_path) {
             Ok(f) => f,
             Err(e) => {
-                eprintln!("  Failed to open P2P TLS CA '{}': {} - using plain TCP for outbound", ca_path, e);
+                eprintln!(
+                    "  Failed to open P2P TLS CA '{}': {} - using plain TCP for outbound",
+                    ca_path, e
+                );
                 return None;
             }
         };
@@ -490,22 +528,25 @@ pub fn load_p2p_client_tls_config() -> Option<Arc<rustls::ClientConfig>> {
                 }
             }
             Err(e) => {
-                eprintln!("  Failed to parse P2P TLS CA '{}': {} - using plain TCP for outbound", ca_path, e);
+                eprintln!(
+                    "  Failed to parse P2P TLS CA '{}': {} - using plain TCP for outbound",
+                    ca_path, e
+                );
                 return None;
             }
         }
         println!(" P2P TLS client enabled with custom CA: '{}'", ca_path);
     } else {
         // Use webpki roots for public certificates
-        root_store.add_trust_anchors(
-            webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                    ta.subject.as_ref(),
-                    ta.spki.as_ref(),
-                    ta.name_constraints.as_ref().map(|nc| -> &[u8] { nc.as_ref() }),
-                )
-            })
-        );
+        root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+            rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject.as_ref(),
+                ta.spki.as_ref(),
+                ta.name_constraints
+                    .as_ref()
+                    .map(|nc| -> &[u8] { nc.as_ref() }),
+            )
+        }));
         println!(" P2P TLS client enabled with system roots");
     }
 
@@ -719,8 +760,8 @@ pub async fn run() -> std::io::Result<()> {
                 let identity_path_str = std::env::var("IDENTITY_PATH")
                     .unwrap_or_else(|_| format!("{}/.node_identity.json", db_path));
                 let identity_path = Path::new(&identity_path_str);
-                let identity = node_identity::NodeIdentity::load_or_create(identity_path)
-                    .map_err(|e| {
+                let identity =
+                    node_identity::NodeIdentity::load_or_create(identity_path).map_err(|e| {
                         eprintln!(" Failed to load node identity: {}", e);
                         std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
                     })?;
@@ -739,18 +780,16 @@ pub async fn run() -> std::io::Result<()> {
                 let keypair_path = Path::new(&keypair_path_str);
 
                 let node_keypair = if keypair_path.exists() {
-                    crate::crypto::load_signing_key(keypair_path)
-                        .map_err(|e| {
-                            eprintln!(" Failed to load node keypair: {}", e);
-                            std::io::Error::new(std::io::ErrorKind::Other, e)
-                        })?
+                    crate::crypto::load_signing_key(keypair_path).map_err(|e| {
+                        eprintln!(" Failed to load node keypair: {}", e);
+                        std::io::Error::new(std::io::ErrorKind::Other, e)
+                    })?
                 } else {
                     println!(" Generating new node keypair...");
-                    crate::crypto::generate_and_write_signing_key(keypair_path)
-                        .map_err(|e| {
-                            eprintln!(" Failed to generate node keypair: {}", e);
-                            std::io::Error::new(std::io::ErrorKind::Other, e)
-                        })?
+                    crate::crypto::generate_and_write_signing_key(keypair_path).map_err(|e| {
+                        eprintln!(" Failed to generate node keypair: {}", e);
+                        std::io::Error::new(std::io::ErrorKind::Other, e)
+                    })?
                 };
 
                 let node_pubkey_hex = hex::encode(node_keypair.verifying_key().to_bytes());
@@ -781,9 +820,9 @@ pub async fn run() -> std::io::Result<()> {
                 let update_config_path = Path::new(&update_config_path_str);
                 let update_config = auto_update::UpdateConfig::load_or_create(update_config_path)
                     .map_err(|e| {
-                        eprintln!("  Failed to load update config: {}", e);
-                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-                    })?;
+                    eprintln!("  Failed to load update config: {}", e);
+                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+                })?;
 
                 let update_config_arc = Arc::new(Mutex::new(update_config.clone()));
 
@@ -806,13 +845,17 @@ pub async fn run() -> std::io::Result<()> {
                         }
 
                         // Perform update check
-                        let update_result = auto_update::check_for_updates(&env!("CARGO_PKG_VERSION")).await
-                            .map_err(|e| e.to_string());
+                        let update_result =
+                            auto_update::check_for_updates(&env!("CARGO_PKG_VERSION"))
+                                .await
+                                .map_err(|e| e.to_string());
                         match update_result {
                             Ok(Some(update_info)) => {
-                                println!("\n Update available: {} (current: {})",
+                                println!(
+                                    "\n Update available: {} (current: {})",
                                     update_info.version,
-                                    env!("CARGO_PKG_VERSION"));
+                                    env!("CARGO_PKG_VERSION")
+                                );
                                 println!("   Download: {}", update_info.download_url);
                                 println!("   Run 'cargo build --release' to upgrade\n");
 
@@ -836,10 +879,18 @@ pub async fn run() -> std::io::Result<()> {
                     }
                 });
 
-                println!(" Auto-updates: {}", if update_config.auto_update_enabled { "Enabled" } else { "Disabled" });
+                println!(
+                    " Auto-updates: {}",
+                    if update_config.auto_update_enabled {
+                        "Enabled"
+                    } else {
+                        "Disabled"
+                    }
+                );
                 if let Some(last_check) = &update_config.last_check {
                     if let Ok(last_check_dt) = chrono::DateTime::parse_from_rfc3339(last_check) {
-                        let elapsed = chrono::Utc::now().signed_duration_since(last_check_dt.with_timezone(&chrono::Utc));
+                        let elapsed = chrono::Utc::now()
+                            .signed_duration_since(last_check_dt.with_timezone(&chrono::Utc));
                         println!("   Last check: {} hours ago", elapsed.num_hours());
                     }
                 }
@@ -849,7 +900,8 @@ pub async fn run() -> std::io::Result<()> {
                 // Start P2P network
                 let listen = std::env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:9000".into());
                 let tor_config = tor::TorConfig::from_env();
-                let (bcast_sender, mut inbound_rx, peer_store) = start_network(&listen, Some(tor_config)).await;
+                let (bcast_sender, mut inbound_rx, peer_store) =
+                    start_network(&listen, Some(tor_config)).await;
                 println!(" P2P network started on {}", listen);
 
                 // Debug: Check PEER_ADDRS and peer_store
@@ -860,8 +912,10 @@ pub async fn run() -> std::io::Result<()> {
                     let store = peer_store.lock().await;
                     println!(" Peer store has {} peer(s):", store.len());
                     for (i, p) in store.iter().enumerate() {
-                        println!("   [{}] {} (failures: {}, last_seen: {:?})",
-                            i, p.addr, p.failures, p.last_seen_unix);
+                        println!(
+                            "   [{}] {} (failures: {}, last_seen: {:?})",
+                            i, p.addr, p.failures, p.last_seen_unix
+                        );
                     }
                 }
 
@@ -878,11 +932,10 @@ pub async fn run() -> std::io::Result<()> {
 
                 // Start minimal API server (just health check)
                 let api_addr = std::env::var("API_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".into());
-                let api_addr_parsed: SocketAddr = api_addr.parse()
-                    .map_err(|e| {
-                        eprintln!(" Invalid API_ADDR format: '{}': {}", api_addr, e);
-                        std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
-                    })?;
+                let api_addr_parsed: SocketAddr = api_addr.parse().map_err(|e| {
+                    eprintln!(" Invalid API_ADDR format: '{}': {}", api_addr, e);
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
+                })?;
 
                 // Create router with v0.3.0 API endpoints
                 use axum::{extract::State, http::StatusCode, response::Json, Extension};
@@ -1089,23 +1142,31 @@ pub async fn run() -> std::io::Result<()> {
                     // Read peers from the saved file instead of the locked peer_store
                     // Use platform-specific home directory
                     let home = if cfg!(windows) {
-                        std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string())
+                        std::env::var("USERPROFILE")
+                            .unwrap_or_else(|_| "C:\\Users\\Default".to_string())
                     } else {
                         std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())
                     };
-                    let peers_path = std::path::PathBuf::from(home).join(".ouroboros").join("peers.json");
+                    let peers_path = std::path::PathBuf::from(home)
+                        .join(".ouroboros")
+                        .join("peers.json");
 
                     if let Ok(content) = tokio::fs::read_to_string(&peers_path).await {
-                        if let Ok(peers) = serde_json::from_str::<Vec<crate::network::PeerEntry>>(&content) {
-                            let peer_list: Vec<serde_json::Value> = peers.iter().map(|entry| {
-                                serde_json::json!({
-                                    "id": entry.addr.replace(":", "-"),
-                                    "addr": entry.addr,
-                                    "latency_ms": 50,
-                                    "failures": entry.failures,
-                                    "last_seen": entry.last_seen_unix
+                        if let Ok(peers) =
+                            serde_json::from_str::<Vec<crate::network::PeerEntry>>(&content)
+                        {
+                            let peer_list: Vec<serde_json::Value> = peers
+                                .iter()
+                                .map(|entry| {
+                                    serde_json::json!({
+                                        "id": entry.addr.replace(":", "-"),
+                                        "addr": entry.addr,
+                                        "latency_ms": 50,
+                                        "failures": entry.failures,
+                                        "last_seen": entry.last_seen_unix
+                                    })
                                 })
-                            }).collect();
+                                .collect();
                             return Json(serde_json::json!({
                                 "count": peer_list.len(),
                                 "peers": peer_list
@@ -1135,7 +1196,10 @@ pub async fn run() -> std::io::Result<()> {
                 println!("   Storage: RocksDB ({})", db_path);
 
                 // Run API server
-                println!(" Starting API server (HTTP only) on http://{}", api_addr_parsed);
+                println!(
+                    " Starting API server (HTTP only) on http://{}",
+                    api_addr_parsed
+                );
                 if let Err(e) = axum_server::bind(api_addr_parsed)
                     .serve(app.into_make_service_with_connect_info::<SocketAddr>())
                     .await
@@ -1160,24 +1224,22 @@ pub async fn run() -> std::io::Result<()> {
 
             // Initialize TOR configuration for hybrid clearnet + darkweb support
             let tor_config = tor::TorConfig::from_env();
-            let (bcast_sender, mut inbound_rx, peer_store) = start_network(&listen, Some(tor_config)).await;
+            let (bcast_sender, mut inbound_rx, peer_store) =
+                start_network(&listen, Some(tor_config)).await;
 
             // start API server (axum) - pass api_peer_store into router
             let api_addr = std::env::var("API_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".into());
-            let api_addr_parsed: SocketAddr = api_addr.parse()
-                .map_err(|e| {
-                    eprintln!(
-                        " Invalid API_ADDR format: '{}': {}\
+            let api_addr_parsed: SocketAddr = api_addr.parse().map_err(|e| {
+                eprintln!(
+                    " Invalid API_ADDR format: '{}': {}\
                         \n   Expected format: IP:PORT (e.g., 0.0.0.0:8000)",
-                        api_addr, e
-                    );
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
-                })?;
+                    api_addr, e
+                );
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
+            })?;
 
             // TPS Optimization: Initialize batch transaction writer
-            let batch_writer = Arc::new(crate::batch_writer::BatchWriter::new(
-                (*db_pool).clone(),
-            ));
+            let batch_writer = Arc::new(crate::batch_writer::BatchWriter::new((*db_pool).clone()));
             println!(" Batch transaction writer initialized (target: 20k-50k TPS)");
 
             // Build main API router
@@ -1194,14 +1256,15 @@ pub async fn run() -> std::io::Result<()> {
                 println!(" Multi-sig anchor posting ENABLED");
 
                 // Load validator public keys from database
-                let validator_keys = match crate::multisig::MultiSigCoordinator::load_validator_keys().await {
-                    Ok(keys) => keys,
-                    Err(e) => {
-                        eprintln!("  Failed to load multi-sig validator keys: {}", e);
-                        eprintln!("   Falling back to single-sig mode");
-                        std::collections::HashMap::new()
-                    }
-                };
+                let validator_keys =
+                    match crate::multisig::MultiSigCoordinator::load_validator_keys().await {
+                        Ok(keys) => keys,
+                        Err(e) => {
+                            eprintln!("  Failed to load multi-sig validator keys: {}", e);
+                            eprintln!("   Falling back to single-sig mode");
+                            std::collections::HashMap::new()
+                        }
+                    };
 
                 if !validator_keys.is_empty() {
                     let threshold = std::env::var("MULTISIG_THRESHOLD")
@@ -1212,8 +1275,14 @@ pub async fn run() -> std::io::Result<()> {
                     match crate::multisig::MultiSigConfig::new(threshold, validator_keys) {
                         Ok(config) => {
                             let coordinator = crate::multisig::MultiSigCoordinator::new(config);
-                            println!(" Multi-sig coordinator initialized: {}/{} threshold", threshold, coordinator.config.total_validators);
-                            Arc::new(crate::anchor_service::AnchorService::new_with_multisig(db_pool.clone(), coordinator))
+                            println!(
+                                " Multi-sig coordinator initialized: {}/{} threshold",
+                                threshold, coordinator.config.total_validators
+                            );
+                            Arc::new(crate::anchor_service::AnchorService::new_with_multisig(
+                                db_pool.clone(),
+                                coordinator,
+                            ))
                         }
                         Err(e) => {
                             eprintln!("  Multi-sig config error: {}", e);
@@ -1231,7 +1300,9 @@ pub async fn run() -> std::io::Result<()> {
             };
 
             // Phase 5: Initialize Validator Registry
-            let validator_registry = Arc::new(crate::validator_registration::ValidatorRegistry::new(db_pool.clone()));
+            let validator_registry = Arc::new(
+                crate::validator_registration::ValidatorRegistry::new(db_pool.clone()),
+            );
             println!(" Validator registry initialized");
 
             // Build sub-routers (now with authentication!)
@@ -1245,7 +1316,8 @@ pub async fn run() -> std::io::Result<()> {
             // let token_bucket_router = crate::token_bucket::api::router(Arc::new(db_pool.clone()));
 
             // Phase 5: Validator registration router
-            let validator_router = crate::validator_registration::api::router(validator_registry.clone());
+            let validator_router =
+                crate::validator_registration::api::router(validator_registry.clone());
 
             // Combine all routers
             let router = main_router
@@ -1268,14 +1340,19 @@ pub async fn run() -> std::io::Result<()> {
             if is_production && tls_config.is_none() {
                 eprintln!("\n CRITICAL: Production deployment REQUIRES TLS/HTTPS!");
                 eprintln!("   Set TLS_CERT_PATH and TLS_KEY_PATH environment variables.");
-                eprintln!("   Or set ENVIRONMENT to 'development' if this is a dev/test instance.\n");
+                eprintln!(
+                    "   Or set ENVIRONMENT to 'development' if this is a dev/test instance.\n"
+                );
                 std::process::exit(1);
             }
 
             tokio::spawn(async move {
                 if let Some(tls) = tls_config {
                     // HTTPS mode
-                    println!(" Starting API server with TLS on https://{}", api_addr_parsed);
+                    println!(
+                        " Starting API server with TLS on https://{}",
+                        api_addr_parsed
+                    );
                     if let Err(e) = axum_server::bind_rustls(api_addr_parsed, tls)
                         .serve(router.into_make_service_with_connect_info::<SocketAddr>())
                         .await
@@ -1289,7 +1366,10 @@ pub async fn run() -> std::io::Result<()> {
                     }
                 } else {
                     // HTTP mode (fallback)
-                    println!(" Starting API server (HTTP only) on http://{}", api_addr_parsed);
+                    println!(
+                        " Starting API server (HTTP only) on http://{}",
+                        api_addr_parsed
+                    );
                     if let Err(e) = axum_server::bind(api_addr_parsed)
                         .serve(router.into_make_service_with_connect_info::<SocketAddr>())
                         .await
@@ -1348,9 +1428,8 @@ pub async fn run() -> std::io::Result<()> {
                 .collect();
 
             // Convert SocketAddr to NodeId (String) for HotStuffConfig
-            let peer_node_ids: Vec<String> = bft_peers.iter()
-                .map(|addr| addr.to_string())
-                .collect();
+            let peer_node_ids: Vec<String> =
+                bft_peers.iter().map(|addr| addr.to_string()).collect();
 
             println!(" Initializing HotStuff consensus:");
             println!("   Node ID: {}", node_id);
@@ -1362,7 +1441,9 @@ pub async fn run() -> std::io::Result<()> {
                 .ok()
                 .and_then(|s| hex::decode(s).ok())
                 .unwrap_or_else(|| {
-                    println!("  BFT_SECRET_SEED not set, using placeholder zeros (NOT FOR PRODUCTION)");
+                    println!(
+                        "  BFT_SECRET_SEED not set, using placeholder zeros (NOT FOR PRODUCTION)"
+                    );
                     vec![0u8; 32]
                 });
 
@@ -1390,12 +1471,10 @@ pub async fn run() -> std::io::Result<()> {
                 .parse::<u16>()
                 .unwrap_or(9091);
 
-            let bft_addr: SocketAddr = format!("0.0.0.0:{}", bft_port)
-                .parse()
-                .map_err(|e| {
-                    eprintln!(" Invalid BFT_PORT configuration: {}", e);
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
-                })?;
+            let bft_addr: SocketAddr = format!("0.0.0.0:{}", bft_port).parse().map_err(|e| {
+                eprintln!(" Invalid BFT_PORT configuration: {}", e);
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
+            })?;
 
             let hotstuff_for_server = hotstuff.clone();
             tokio::spawn(async move {
@@ -1440,7 +1519,10 @@ pub async fn run() -> std::io::Result<()> {
             let checkpoint_interval = Duration::from_secs(5); // Consensus trigger interval
 
             println!("🧠 Ouroboros DAG engine running (consensus + p2p + mempool) ...");
-            println!("   HotStuff consensus will propose blocks every {} seconds", checkpoint_interval.as_secs());
+            println!(
+                "   HotStuff consensus will propose blocks every {} seconds",
+                checkpoint_interval.as_secs()
+            );
 
             loop {
                 // check file-based submission
@@ -1487,7 +1569,10 @@ pub async fn run() -> std::io::Result<()> {
                                 // Re-add txs to mempool if block finalization failed
                                 for tx in &block_txns_ref {
                                     if let Err(err) = mempool_arc.add_tx(tx) {
-                                        println!("Failed to re-add tx {} to mempool: {}", tx.id, err);
+                                        println!(
+                                            "Failed to re-add tx {} to mempool: {}",
+                                            tx.id, err
+                                        );
                                     }
                                 }
                                 last_checkpoint = Instant::now();
@@ -1504,52 +1589,52 @@ pub async fn run() -> std::io::Result<()> {
                                 height: 0, // TODO: Get actual height from blockchain
                             };
                             println!(" Block ID: {} at {}", block.id, block.timestamp);
-                        
-                                                    // execute contracts (VM)
-                                                    match vm::execute_contracts(&db_pool, &block_txns_ref) {
-                                                        Ok(_res) => {
-                                                            // Persist block to RocksDB (authoritative storage)
-                                                            let block_key = format!("block:{}", block.id);
-                                                            if let Err(e) = put(&db_pool, block_key.clone().into_bytes(), &block) {
-                                                                println!(
-                                                                    "Warning: Failed to persist block to local kv: {}",
-                                                                    e
-                                                                );
-                                                            }
 
-                                                            let mut index_entries: Vec<(Vec<u8>, String)> = Vec::new();
-                                                            for txid in block.tx_ids.iter() {
-                                                                index_entries.push((
-                                                                    format!("tx_index:{}", txid).into_bytes(),
-                                                                    block.id.to_string(),
-                                                                ));
-                                                            }
-                                                            if let Err(e) = batch_put(&db_pool, index_entries) {
-                                                                println!(
+                            // execute contracts (VM)
+                            match vm::execute_contracts(&db_pool, &block_txns_ref) {
+                                Ok(_res) => {
+                                    // Persist block to RocksDB (authoritative storage)
+                                    let block_key = format!("block:{}", block.id);
+                                    if let Err(e) =
+                                        put(&db_pool, block_key.clone().into_bytes(), &block)
+                                    {
+                                        println!(
+                                            "Warning: Failed to persist block to local kv: {}",
+                                            e
+                                        );
+                                    }
+
+                                    let mut index_entries: Vec<(Vec<u8>, String)> = Vec::new();
+                                    for txid in block.tx_ids.iter() {
+                                        index_entries.push((
+                                            format!("tx_index:{}", txid).into_bytes(),
+                                            block.id.to_string(),
+                                        ));
+                                    }
+                                    if let Err(e) = batch_put(&db_pool, index_entries) {
+                                        println!(
                                                                     "Warning: Failed to persist tx_index entries to local kv: {}",
                                                                     e
                                                                 );
-                                                            }
-                        
-                                                            println!(
-                                                                "Persisted block {} to RocksDB",
-                                                                block.id
-                                                            );
-                                                        }
-                                                        Err(e) => {
-                                                            println!(
-                                                                " Contract execution failed for block {}: {}",
-                                                                block.id, e
-                                                            );
-                                                            // Put txs back into mempool
-                                                            for tx in &block_txns_ref {
-                                                                if let Err(err) = mempool_arc.add_tx(tx) {
-                                                                    println!("Failed to re-add tx {} to mempool after contract failure: {}", tx.id, err);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }                    }
+                                    }
+
+                                    println!("Persisted block {} to RocksDB", block.id);
+                                }
+                                Err(e) => {
+                                    println!(
+                                        " Contract execution failed for block {}: {}",
+                                        block.id, e
+                                    );
+                                    // Put txs back into mempool
+                                    for tx in &block_txns_ref {
+                                        if let Err(err) = mempool_arc.add_tx(tx) {
+                                            println!("Failed to re-add tx {} to mempool after contract failure: {}", tx.id, err);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     last_checkpoint = Instant::now();
                 }
@@ -1559,7 +1644,6 @@ pub async fn run() -> std::io::Result<()> {
         }
 
         // ==================== CLI DASHBOARD COMMANDS ====================
-
         Commands::Status { watch, api } => {
             handle_status_command(*watch, api).await?;
         }
@@ -1580,7 +1664,11 @@ pub async fn run() -> std::io::Result<()> {
             handle_resources_command(api).await?;
         }
 
-        Commands::Logs { lines, follow, export } => {
+        Commands::Logs {
+            lines,
+            follow,
+            export,
+        } => {
             handle_logs_command(*lines, *follow, export.clone()).await?;
         }
 
@@ -1596,19 +1684,21 @@ pub async fn run() -> std::io::Result<()> {
             handle_diagnose_command(export.clone()).await?;
         }
 
-        Commands::Wallet { command } => {
-            match command {
-                WalletCommands::Status { api } => {
-                    handle_wallet_status(api).await?;
-                }
-                WalletCommands::Link { address, signature, api } => {
-                    handle_wallet_link(address, signature, api).await?;
-                }
-                WalletCommands::Unlink { api } => {
-                    handle_wallet_unlink(api).await?;
-                }
+        Commands::Wallet { command } => match command {
+            WalletCommands::Status { api } => {
+                handle_wallet_status(api).await?;
             }
-        }
+            WalletCommands::Link {
+                address,
+                signature,
+                api,
+            } => {
+                handle_wallet_link(address, signature, api).await?;
+            }
+            WalletCommands::Unlink { api } => {
+                handle_wallet_unlink(api).await?;
+            }
+        },
 
         Commands::Resync { api } => {
             handle_resync_command(api).await?;
@@ -1618,8 +1708,21 @@ pub async fn run() -> std::io::Result<()> {
             handle_backup_command(output.clone()).await?;
         }
 
-        Commands::Oracle { peer, config, storage, rocksdb_path, api_port } => {
-            handle_oracle_command(peer.clone(), config.clone(), storage, rocksdb_path.clone(), *api_port).await?;
+        Commands::Oracle {
+            peer,
+            config,
+            storage,
+            rocksdb_path,
+            api_port,
+        } => {
+            handle_oracle_command(
+                peer.clone(),
+                config.clone(),
+                storage,
+                rocksdb_path.clone(),
+                *api_port,
+            )
+            .await?;
         }
     }
 
@@ -1639,11 +1742,17 @@ async fn fetch_api<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, Strin
         }
     }
 
-    let response = request.send().await.map_err(|e| format!("Failed to connect: {}", e))?;
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect: {}", e))?;
     if !response.status().is_success() {
         return Err(format!("API returned error: {}", response.status()));
     }
-    response.json::<T>().await.map_err(|e| format!("Failed to parse response: {}", e))
+    response
+        .json::<T>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
@@ -1662,7 +1771,11 @@ async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
             data.status = NodeStatus::Stopped;
             print_dashboard(&data);
             if !watch {
-                println!("\n{}Node appears to be offline. Start with: ouro start{}", colors::YELLOW, colors::RESET);
+                println!(
+                    "\n{}Node appears to be offline. Start with: ouro start{}",
+                    colors::YELLOW,
+                    colors::RESET
+                );
                 break;
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -1687,13 +1800,18 @@ async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
                 data.peer_count = count as u32;
             }
             if let Some(peer_list) = peers.get("peers").and_then(|v| v.as_array()) {
-                data.top_peers = peer_list.iter().take(3).filter_map(|p| {
-                    Some(PeerInfo {
-                        id: p.get("id")?.as_str()?.to_string(),
-                        addr: p.get("addr")?.as_str()?.to_string(),
-                        latency_ms: p.get("latency_ms").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                data.top_peers = peer_list
+                    .iter()
+                    .take(3)
+                    .filter_map(|p| {
+                        Some(PeerInfo {
+                            id: p.get("id")?.as_str()?.to_string(),
+                            addr: p.get("addr")?.as_str()?.to_string(),
+                            latency_ms: p.get("latency_ms").and_then(|v| v.as_u64()).unwrap_or(0)
+                                as u32,
+                        })
                     })
-                }).collect();
+                    .collect();
             }
         }
 
@@ -1737,21 +1855,35 @@ async fn handle_peers_command(api: &str) -> std::io::Result<()> {
 
     match fetch_api::<serde_json::Value>(&format!("{}/peers", api)).await {
         Ok(peers) => {
-            let peer_list: Vec<PeerInfo> = peers.get("peers")
+            let peer_list: Vec<PeerInfo> = peers
+                .get("peers")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|p| {
-                    Some(PeerInfo {
-                        id: p.get("id")?.as_str()?.to_string(),
-                        addr: p.get("addr")?.as_str()?.to_string(),
-                        latency_ms: p.get("latency_ms").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                    })
-                }).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|p| {
+                            Some(PeerInfo {
+                                id: p.get("id")?.as_str()?.to_string(),
+                                addr: p.get("addr")?.as_str()?.to_string(),
+                                latency_ms: p
+                                    .get("latency_ms")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32,
+                            })
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
 
             print_peers(&peer_list);
         }
         Err(e) => {
-            eprintln!("{}Error:{} Failed to fetch peers: {}", colors::RED, colors::RESET, e);
+            eprintln!(
+                "{}Error:{} Failed to fetch peers: {}",
+                colors::RED,
+                colors::RESET,
+                e
+            );
             eprintln!("Is the node running? Try: ouro start");
         }
     }
@@ -1766,12 +1898,23 @@ async fn handle_consensus_command(api: &str) -> std::io::Result<()> {
 
     if let Ok(consensus) = fetch_api::<serde_json::Value>(&format!("{}/consensus", api)).await {
         data.view = consensus.get("view").and_then(|v| v.as_u64()).unwrap_or(0);
-        data.leader = consensus.get("leader").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-        data.highest_qc = consensus.get("highest_qc_view").and_then(|v| v.as_u64()).unwrap_or(0);
+        data.leader = consensus
+            .get("leader")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        data.highest_qc = consensus
+            .get("highest_qc_view")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
 
         if let Some(last) = consensus.get("last_committed") {
             data.last_block_height = last.get("height").and_then(|v| v.as_u64()).unwrap_or(0);
-            data.last_block_time = last.get("timestamp").and_then(|v| v.as_str()).unwrap_or("N/A").to_string();
+            data.last_block_time = last
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .unwrap_or("N/A")
+                .to_string();
         }
     }
 
@@ -1785,10 +1928,22 @@ async fn handle_mempool_command(api: &str) -> std::io::Result<()> {
     let mut data = DashboardData::default();
 
     if let Ok(mempool) = fetch_api::<serde_json::Value>(&format!("{}/mempool", api)).await {
-        data.mempool_tx_count = mempool.get("tx_count").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-        data.mempool_avg_age_secs = mempool.get("avg_age_seconds").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        data.tps_1m = mempool.get("tps_1m").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        data.tps_5m = mempool.get("tps_5m").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        data.mempool_tx_count = mempool
+            .get("tx_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        data.mempool_avg_age_secs = mempool
+            .get("avg_age_seconds")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        data.tps_1m = mempool
+            .get("tps_1m")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        data.tps_5m = mempool
+            .get("tps_5m")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
     }
 
     print_mempool(&data);
@@ -1801,19 +1956,41 @@ async fn handle_resources_command(api: &str) -> std::io::Result<()> {
     let mut data = DashboardData::default();
 
     if let Ok(resources) = fetch_api::<serde_json::Value>(&format!("{}/resources", api)).await {
-        data.cpu_percent = resources.get("cpu_pct").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        data.mem_mb = resources.get("mem_mb").and_then(|v| v.as_u64()).unwrap_or(0);
-        data.disk_used_gb = resources.get("disk_gb_used").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        data.disk_total_gb = resources.get("disk_gb_total").and_then(|v| v.as_f64()).unwrap_or(100.0);
-        data.net_in_kbps = resources.get("net_in_kbps").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        data.net_out_kbps = resources.get("net_out_kbps").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        data.cpu_percent = resources
+            .get("cpu_pct")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        data.mem_mb = resources
+            .get("mem_mb")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        data.disk_used_gb = resources
+            .get("disk_gb_used")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        data.disk_total_gb = resources
+            .get("disk_gb_total")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(100.0);
+        data.net_in_kbps = resources
+            .get("net_in_kbps")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        data.net_out_kbps = resources
+            .get("net_out_kbps")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
     }
 
     print_resources(&data);
     Ok(())
 }
 
-async fn handle_logs_command(lines: u32, follow: bool, export: Option<String>) -> std::io::Result<()> {
+async fn handle_logs_command(
+    lines: u32,
+    follow: bool,
+    export: Option<String>,
+) -> std::io::Result<()> {
     use cli_dashboard::colors;
 
     let log_path = std::env::var("LOG_PATH").unwrap_or_else(|_| "ouro.log".to_string());
@@ -1822,15 +1999,30 @@ async fn handle_logs_command(lines: u32, follow: bool, export: Option<String>) -
         // Export logs to file
         if std::path::Path::new(&log_path).exists() {
             std::fs::copy(&log_path, &export_path)?;
-            println!("{}Logs exported to: {}{}", colors::GREEN, export_path, colors::RESET);
+            println!(
+                "{}Logs exported to: {}{}",
+                colors::GREEN,
+                export_path,
+                colors::RESET
+            );
         } else {
-            eprintln!("{}Error:{} Log file not found at {}", colors::RED, colors::RESET, log_path);
+            eprintln!(
+                "{}Error:{} Log file not found at {}",
+                colors::RED,
+                colors::RESET,
+                log_path
+            );
         }
         return Ok(());
     }
 
     if !std::path::Path::new(&log_path).exists() {
-        println!("{}No log file found at {}{}",colors::YELLOW, log_path, colors::RESET);
+        println!(
+            "{}No log file found at {}{}",
+            colors::YELLOW,
+            log_path,
+            colors::RESET
+        );
         println!("Node may not be running or logs are sent to stdout.");
         return Ok(());
     }
@@ -1840,7 +2032,12 @@ async fn handle_logs_command(lines: u32, follow: bool, export: Option<String>) -
     let all_lines: Vec<&str> = content.lines().collect();
     let start = all_lines.len().saturating_sub(lines as usize);
 
-    println!("{}=== Last {} log entries ==={}", colors::CYAN, lines, colors::RESET);
+    println!(
+        "{}=== Last {} log entries ==={}",
+        colors::CYAN,
+        lines,
+        colors::RESET
+    );
     for line in &all_lines[start..] {
         // Color code log levels
         if line.contains("ERROR") || line.contains("error") {
@@ -1855,7 +2052,11 @@ async fn handle_logs_command(lines: u32, follow: bool, export: Option<String>) -
     }
 
     if follow {
-        println!("\n{}Following logs (Ctrl+C to stop)...{}", colors::DIM, colors::RESET);
+        println!(
+            "\n{}Following logs (Ctrl+C to stop)...{}",
+            colors::DIM,
+            colors::RESET
+        );
         // In a real implementation, we'd tail -f the log file
         // For now, just poll periodically
         let mut last_size = std::fs::metadata(&log_path)?.len();
@@ -1895,10 +2096,19 @@ async fn handle_stop_command(api: &str) -> std::io::Result<()> {
         .await
     {
         Ok(resp) if resp.status().is_success() => {
-            println!("{}Node stopped successfully.{}", colors::GREEN, colors::RESET);
+            println!(
+                "{}Node stopped successfully.{}",
+                colors::GREEN,
+                colors::RESET
+            );
         }
         Ok(resp) => {
-            eprintln!("{}Failed to stop node: {}{}", colors::RED, resp.status(), colors::RESET);
+            eprintln!(
+                "{}Failed to stop node: {}{}",
+                colors::RED,
+                resp.status(),
+                colors::RESET
+            );
         }
         Err(e) => {
             // If connection refused, node might already be stopped
@@ -1925,10 +2135,19 @@ async fn handle_restart_command(api: &str) -> std::io::Result<()> {
     {
         Ok(resp) if resp.status().is_success() => {
             println!("{}Node restarting...{}", colors::GREEN, colors::RESET);
-            println!("{}Run 'ouro status --watch' to monitor startup.{}", colors::DIM, colors::RESET);
+            println!(
+                "{}Run 'ouro status --watch' to monitor startup.{}",
+                colors::DIM,
+                colors::RESET
+            );
         }
         Ok(resp) => {
-            eprintln!("{}Failed to restart node: {}{}", colors::RED, resp.status(), colors::RESET);
+            eprintln!(
+                "{}Failed to restart node: {}{}",
+                colors::RED,
+                resp.status(),
+                colors::RESET
+            );
         }
         Err(e) => {
             eprintln!("{}Error: {}{}", colors::RED, e, colors::RESET);
@@ -1961,8 +2180,16 @@ async fn handle_diagnose_command(export: Option<String>) -> std::io::Result<()> 
     ];
 
     for (var, desc) in &checks {
-        let status = if std::env::var(var).is_ok() { "OK" } else { "NOT SET" };
-        let color = if status == "OK" { colors::GREEN } else { colors::YELLOW };
+        let status = if std::env::var(var).is_ok() {
+            "OK"
+        } else {
+            "NOT SET"
+        };
+        let color = if status == "OK" {
+            colors::GREEN
+        } else {
+            colors::YELLOW
+        };
         println!("  {}: {}{}{}", desc, color, status, colors::RESET);
         report.push_str(&format!("  {}: {}\n", desc, status));
     }
@@ -2002,13 +2229,21 @@ async fn handle_diagnose_command(export: Option<String>) -> std::io::Result<()> 
     println!("\n[4/5] Checking disk space...");
     report.push_str("\n--- Disk ---\n");
     // Simplified disk check
-    println!("  Disk check: {}SKIPPED{} (platform-specific)", colors::YELLOW, colors::RESET);
+    println!(
+        "  Disk check: {}SKIPPED{} (platform-specific)",
+        colors::YELLOW,
+        colors::RESET
+    );
     report.push_str("  Disk check: SKIPPED\n");
 
     // Check 5: Memory
     println!("\n[5/5] Checking system resources...");
     report.push_str("\n--- Resources ---\n");
-    println!("  Resource check: {}SKIPPED{} (platform-specific)", colors::YELLOW, colors::RESET);
+    println!(
+        "  Resource check: {}SKIPPED{} (platform-specific)",
+        colors::YELLOW,
+        colors::RESET
+    );
     report.push_str("  Resource check: SKIPPED\n");
 
     report.push_str("\n=== END DIAGNOSTIC REPORT ===\n");
@@ -2016,7 +2251,12 @@ async fn handle_diagnose_command(export: Option<String>) -> std::io::Result<()> 
     // Export if requested
     if let Some(path) = export {
         std::fs::write(&path, &report)?;
-        println!("\n{}Diagnostic report exported to: {}{}", colors::GREEN, path, colors::RESET);
+        println!(
+            "\n{}Diagnostic report exported to: {}{}",
+            colors::GREEN,
+            path,
+            colors::RESET
+        );
     }
 
     println!("\n{}Diagnostics complete.{}", colors::GREEN, colors::RESET);
@@ -2029,11 +2269,20 @@ async fn handle_wallet_status(api: &str) -> std::io::Result<()> {
 
     match fetch_api::<serde_json::Value>(&format!("{}/wallet/link", api)).await {
         Ok(wallet) => {
-            let linked = wallet.get("linked").and_then(|v| v.as_bool()).unwrap_or(false);
+            let linked = wallet
+                .get("linked")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             if linked {
-                let addr = wallet.get("wallet_address").and_then(|v| v.as_str()).unwrap_or("unknown");
-                let linked_at = wallet.get("linked_at").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let addr = wallet
+                    .get("wallet_address")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let linked_at = wallet
+                    .get("linked_at")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
 
                 println!("\n{}WALLET STATUS{}", colors::BOLD, colors::RESET);
                 println!("{}", cli_dashboard::horizontal_line(40));
@@ -2074,12 +2323,21 @@ async fn handle_wallet_link(address: &str, signature: &str, api: &str) -> std::i
         .await
     {
         Ok(resp) if resp.status().is_success() => {
-            println!("{}Wallet linked successfully!{}", colors::GREEN, colors::RESET);
+            println!(
+                "{}Wallet linked successfully!{}",
+                colors::GREEN,
+                colors::RESET
+            );
             println!("Address: {}", address);
         }
         Ok(resp) => {
             let error = resp.text().await.unwrap_or_default();
-            eprintln!("{}Failed to link wallet:{} {}", colors::RED, colors::RESET, error);
+            eprintln!(
+                "{}Failed to link wallet:{} {}",
+                colors::RED,
+                colors::RESET,
+                error
+            );
         }
         Err(e) => {
             eprintln!("{}Error:{} {}", colors::RED, colors::RESET, e);
@@ -2100,10 +2358,19 @@ async fn handle_wallet_unlink(api: &str) -> std::io::Result<()> {
         .await
     {
         Ok(resp) if resp.status().is_success() => {
-            println!("{}Wallet unlinked successfully.{}", colors::GREEN, colors::RESET);
+            println!(
+                "{}Wallet unlinked successfully.{}",
+                colors::GREEN,
+                colors::RESET
+            );
         }
         Ok(resp) => {
-            eprintln!("{}Failed to unlink wallet: {}{}", colors::RED, resp.status(), colors::RESET);
+            eprintln!(
+                "{}Failed to unlink wallet: {}{}",
+                colors::RED,
+                resp.status(),
+                colors::RESET
+            );
         }
         Err(e) => {
             eprintln!("{}Error:{} {}", colors::RED, colors::RESET, e);
@@ -2116,7 +2383,11 @@ async fn handle_wallet_unlink(api: &str) -> std::io::Result<()> {
 async fn handle_resync_command(api: &str) -> std::io::Result<()> {
     use cli_dashboard::colors;
 
-    println!("{}WARNING:{} This will resync the node from the network.", colors::YELLOW, colors::RESET);
+    println!(
+        "{}WARNING:{} This will resync the node from the network.",
+        colors::YELLOW,
+        colors::RESET
+    );
     println!("Local state may be temporarily unavailable during sync.\n");
 
     println!("Sending resync command...");
@@ -2131,7 +2402,12 @@ async fn handle_resync_command(api: &str) -> std::io::Result<()> {
             println!("Run 'ouro status --watch' to monitor progress.");
         }
         Ok(resp) => {
-            eprintln!("{}Failed to initiate resync: {}{}", colors::RED, resp.status(), colors::RESET);
+            eprintln!(
+                "{}Failed to initiate resync: {}{}",
+                colors::RED,
+                resp.status(),
+                colors::RESET
+            );
         }
         Err(e) => {
             eprintln!("{}Error:{} {}", colors::RED, colors::RESET, e);
@@ -2146,7 +2422,10 @@ async fn handle_backup_command(output: Option<String>) -> std::io::Result<()> {
 
     let db_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "sled_data".to_string());
     let backup_path = output.unwrap_or_else(|| {
-        format!("ouroboros_backup_{}.tar.gz", chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+        format!(
+            "ouroboros_backup_{}.tar.gz",
+            chrono::Utc::now().format("%Y%m%d_%H%M%S")
+        )
     });
 
     println!("Creating backup of database...");
@@ -2154,13 +2433,22 @@ async fn handle_backup_command(output: Option<String>) -> std::io::Result<()> {
     println!("Target: {}", backup_path);
 
     if !std::path::Path::new(&db_path).exists() {
-        eprintln!("{}Error:{} Database not found at {}", colors::RED, colors::RESET, db_path);
+        eprintln!(
+            "{}Error:{} Database not found at {}",
+            colors::RED,
+            colors::RESET,
+            db_path
+        );
         return Ok(());
     }
 
     // Create tar.gz backup
     // Note: In a real implementation, we'd use the tar crate
-    println!("\n{}Backup functionality requires tar crate.{}", colors::YELLOW, colors::RESET);
+    println!(
+        "\n{}Backup functionality requires tar crate.{}",
+        colors::YELLOW,
+        colors::RESET
+    );
     println!("For now, manually copy the database directory:");
     println!("  cp -r {} {}", db_path, backup_path);
 
@@ -2234,9 +2522,10 @@ async fn handle_oracle_command(
     println!("Press Ctrl+C to stop.\n");
 
     // Run oracle main loop
-    oracle.run().await.map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-    })?;
+    oracle
+        .run()
+        .await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     Ok(())
 }

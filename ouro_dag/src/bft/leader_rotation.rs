@@ -1,6 +1,6 @@
 // src/bft/leader_rotation.rs
 use crate::bft::consensus::NodeId;
-use crate::vrf::{vrf_prove, vrf_verify, select_leader};
+use crate::vrf::{select_leader, vrf_prove, vrf_verify};
 
 /// VRF-based leader selection with stake-weighted probability
 ///
@@ -76,7 +76,8 @@ pub fn elect_leader_vrf(
     for node in nodes {
         if let Some(output) = vrf_outputs.get(node) {
             // Get stake for this node
-            let stake = stakes.iter()
+            let stake = stakes
+                .iter()
                 .find(|(n, _)| n == node)
                 .map(|(_, s)| *s)
                 .unwrap_or(0);
@@ -87,7 +88,9 @@ pub fn elect_leader_vrf(
 
             // Calculate weighted VRF value (lower is better, weighted by stake)
             // Convert VRF value to a number for comparison
-            let vrf_value = output.value.iter()
+            let vrf_value = output
+                .value
+                .iter()
                 .take(16)
                 .fold(0u128, |acc, &b| (acc << 8) | b as u128);
 
@@ -104,7 +107,11 @@ pub fn elect_leader_vrf(
         }
     }
 
-    log::debug!("VRF leader election for view {}: {:?}", view, best_leader.as_ref().map(|(n, _)| n));
+    log::debug!(
+        "VRF leader election for view {}: {:?}",
+        view,
+        best_leader.as_ref().map(|(n, _)| n)
+    );
     best_leader.map(|(node, _)| node)
 }
 
@@ -132,7 +139,8 @@ pub fn elect_leader_vrf_verified(
             match vrf_verify(pubkey, input.as_bytes(), output) {
                 Ok(true) => {
                     // Get stake for this node
-                    let stake = stakes.iter()
+                    let stake = stakes
+                        .iter()
                         .find(|(n, _)| n == node)
                         .map(|(_, s)| *s)
                         .unwrap_or(0);
@@ -142,7 +150,9 @@ pub fn elect_leader_vrf_verified(
                     }
 
                     // Calculate weighted VRF value
-                    let vrf_value = output.value.iter()
+                    let vrf_value = output
+                        .value
+                        .iter()
                         .take(16)
                         .fold(0u128, |acc, &b| (acc << 8) | b as u128);
 
@@ -173,19 +183,19 @@ pub fn elect_leader_vrf_verified(
 /// Input `nodes` must be a stable, deterministic list of validator ids (sorted canonical order).
 /// Returns the proposer NodeId for the given `view`.
 pub fn proposer_for_view(nodes: &[NodeId], myself: &NodeId, view: u64) -> NodeId {
- let mut ordered = nodes.to_vec();
- // ensure we include myself if not already present
- if !ordered.contains(myself) {
- ordered.push(myself.clone());
- }
- ordered.sort(); // stable order
- let idx = (view as usize) % ordered.len();
- ordered[idx].clone()
+    let mut ordered = nodes.to_vec();
+    // ensure we include myself if not already present
+    if !ordered.contains(myself) {
+        ordered.push(myself.clone());
+    }
+    ordered.sort(); // stable order
+    let idx = (view as usize) % ordered.len();
+    ordered[idx].clone()
 }
 
 /// Alternate helper returning index for testing.
 pub fn proposer_index(nodes: &[NodeId], view: u64) -> usize {
- let mut ordered = nodes.to_vec();
- ordered.sort();
- (view as usize) % ordered.len()
+    let mut ordered = nodes.to_vec();
+    ordered.sort();
+    (view as usize) % ordered.len()
 }

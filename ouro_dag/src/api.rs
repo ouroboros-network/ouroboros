@@ -1,9 +1,9 @@
 // src/api.rs
 // Axum-based API router for transaction submit + basic checks
-use crate::PgPool;
-use crate::storage::{open_db, get_str, RocksDb};
 use crate::bft::slashing::SlashingManager;
 use crate::simple_metrics::METRICS;
+use crate::storage::{get_str, open_db, RocksDb};
+use crate::PgPool;
 // TODO_ROCKSDB: Re-enable when modules are converted
 // use crate::intrusion_detection::{IntrusionDetectionSystem, ThreatType, AlertSeverity};
 // use crate::key_rotation::KeyRotationManager;
@@ -15,16 +15,16 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use axum::Router;
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use log::{warn, info, error};
-use uuid::Uuid;
-use thiserror::Error;
 use subtle::ConstantTimeEq;
+use thiserror::Error;
+use uuid::Uuid;
 
 // Type alias for API responses
 type ApiResult = Result<Response, StatusCode>;
@@ -57,7 +57,9 @@ pub struct IntrusionDetectionSystem {
 }
 
 impl IntrusionDetectionSystem {
-    fn new(db: PgPool) -> Self { Self { db } }
+    fn new(db: PgPool) -> Self {
+        Self { db }
+    }
 
     fn get_alerts_by_severity(&self, severity: AlertSeverity) -> Vec<Alert> {
         // TODO_ROCKSDB: Query alerts by severity from RocksDB
@@ -76,7 +78,13 @@ impl IntrusionDetectionSystem {
         Vec::new()
     }
 
-    fn record_event(&self, source: &str, threat_type: ThreatType, severity: AlertSeverity, details: &str) {
+    fn record_event(
+        &self,
+        source: &str,
+        threat_type: ThreatType,
+        severity: AlertSeverity,
+        details: &str,
+    ) {
         // Record security event in RocksDB
         let alert = Alert {
             id: uuid::Uuid::new_v4().to_string(),
@@ -129,9 +137,16 @@ struct KeyRotationManager {
 }
 
 impl KeyRotationManager {
-    fn new(db_pool: PgPool) -> Self { Self { db: db_pool } }
+    fn new(db_pool: PgPool) -> Self {
+        Self { db: db_pool }
+    }
 
-    async fn announce_rotation(&self, validator_id: &str, new_pubkey: &str, effective_block: u64) -> Result<KeyRotation, String> {
+    async fn announce_rotation(
+        &self,
+        validator_id: &str,
+        new_pubkey: &str,
+        effective_block: u64,
+    ) -> Result<KeyRotation, String> {
         // Store key rotation announcement in RocksDB
         let rotation = KeyRotation {
             validator_id: validator_id.to_string(),
@@ -144,8 +159,7 @@ impl KeyRotationManager {
         };
 
         let key = format!("key_rotation:{}", validator_id);
-        crate::storage::put(&self.db, key.as_bytes(), &rotation)
-            .map_err(|e| e.to_string())?;
+        crate::storage::put(&self.db, key.as_bytes(), &rotation).map_err(|e| e.to_string())?;
 
         let _ = effective_block;
         Ok(rotation)
@@ -154,8 +168,7 @@ impl KeyRotationManager {
     async fn get_active_rotation(&self, validator_id: &str) -> Result<Option<KeyRotation>, String> {
         // Query active rotation from RocksDB
         let key = format!("key_rotation:{}", validator_id);
-        crate::storage::get::<_, KeyRotation>(&self.db, key.as_bytes())
-            .map_err(|e| e.to_string())
+        crate::storage::get::<_, KeyRotation>(&self.db, key.as_bytes()).map_err(|e| e.to_string())
     }
 }
 
@@ -179,10 +192,10 @@ impl SimpleRateLimiter {
             warn!("Rate limiter mutex poisoned - recovering data");
             poisoned.into_inner()
         });
- let now = Instant::now();
+        let now = Instant::now();
 
- let entry = buckets.entry(ip.to_string()).or_insert((0, now));
- let (count, window_start) = entry;
+        let entry = buckets.entry(ip.to_string()).or_insert((0, now));
+        let (count, window_start) = entry;
 
         // Check if we're in a new window
         if now.duration_since(*window_start) > self.window_duration {
@@ -201,49 +214,49 @@ impl SimpleRateLimiter {
     }
 
     /// Cleanup old entries (optional, prevents memory growth)
- #[allow(dead_code)]
- fn cleanup_old_entries(&self) {
- let mut buckets = self.buckets.lock().unwrap_or_else(|poisoned| {
- warn!("WARNING Rate limiter mutex poisoned during cleanup - recovering data");
- poisoned.into_inner()
- });
- let now = Instant::now();
- buckets.retain(|_, (_, window_start)| {
- now.duration_since(*window_start) < self.window_duration * 2
- });
- }
+    #[allow(dead_code)]
+    fn cleanup_old_entries(&self) {
+        let mut buckets = self.buckets.lock().unwrap_or_else(|poisoned| {
+            warn!("WARNING Rate limiter mutex poisoned during cleanup - recovering data");
+            poisoned.into_inner()
+        });
+        let now = Instant::now();
+        buckets.retain(|_, (_, window_start)| {
+            now.duration_since(*window_start) < self.window_duration * 2
+        });
+    }
 }
 
 #[derive(Debug, Deserialize)]
 pub struct IncomingTxn {
- pub tx_hash: String,
- pub sender: String,
- pub recipient: String,
- pub payload: JsonValue, // full signed payload from client
- pub signature: Option<String>, // optional meta
- pub idempotency_key: Option<String>, // optional client-supplied idempotency key
- pub nonce: Option<i64>, // optional account nonce
+    pub tx_hash: String,
+    pub sender: String,
+    pub recipient: String,
+    pub payload: JsonValue,              // full signed payload from client
+    pub signature: Option<String>,       // optional meta
+    pub idempotency_key: Option<String>, // optional client-supplied idempotency key
+    pub nonce: Option<i64>,              // optional account nonce
 }
 
 #[derive(Debug, Serialize)]
 struct TxSubmitResponse {
- tx_id: Uuid,
- status: &'static str,
+    tx_id: Uuid,
+    status: &'static str,
 }
 
 #[derive(Debug, Error)]
 enum ApiError {
- #[error("database error")]
- Db(String),
+    #[error("database error")]
+    Db(String),
 
- #[error("duplicate transaction")]
- Duplicate,
+    #[error("duplicate transaction")]
+    Duplicate,
 
- #[error("bad request: {0}")]
- BadRequest(String),
+    #[error("bad request: {0}")]
+    BadRequest(String),
 
- #[error("internal error: {0}")]
- Internal(String),
+    #[error("internal error: {0}")]
+    Internal(String),
 }
 
 // REMOVED: impl From<sqlx::Error>
@@ -252,60 +265,69 @@ enum ApiError {
 // //  }
 
 impl IntoResponse for ApiError {
- fn into_response(self) -> axum::response::Response {
- let (status, body) = match &self {
- ApiError::Db(e) => {
- error!("DB error: {:?}", e);
- (StatusCode::INTERNAL_SERVER_ERROR, "database error".to_string())
- }
- ApiError::Duplicate => (StatusCode::CONFLICT, "duplicate transaction".to_string()),
- ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
- ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.clone()),
- };
- let body_json = serde_json::json!({ "error": body });
- (status, Json(body_json)).into_response()
- }
+    fn into_response(self) -> axum::response::Response {
+        let (status, body) = match &self {
+            ApiError::Db(e) => {
+                error!("DB error: {:?}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database error".to_string(),
+                )
+            }
+            ApiError::Duplicate => (StatusCode::CONFLICT, "duplicate transaction".to_string()),
+            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.clone()),
+        };
+        let body_json = serde_json::json!({ "error": body });
+        (status, Json(body_json)).into_response()
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////
 // POST /tx/submit
 ///////////////////////////////////////////////////////////////////////////
 async fn submit_tx(
- Extension(db_pool): Extension<Arc<RocksDb>>,
- Extension(batch_writer): Extension<Arc<crate::batch_writer::BatchWriter>>,
- Json(incoming): Json<IncomingTxn>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
+    Extension(batch_writer): Extension<Arc<crate::batch_writer::BatchWriter>>,
+    Json(incoming): Json<IncomingTxn>,
 ) -> Result<impl IntoResponse, ApiError> {
- // Basic validation
- if incoming.tx_hash.trim().is_empty() {
- return Err(ApiError::BadRequest("tx_hash required".into()));
- }
- if incoming.sender.trim().is_empty() || incoming.recipient.trim().is_empty() {
- return Err(ApiError::BadRequest("sender and recipient are required".into()));
- }
+    // Basic validation
+    if incoming.tx_hash.trim().is_empty() {
+        return Err(ApiError::BadRequest("tx_hash required".into()));
+    }
+    if incoming.sender.trim().is_empty() || incoming.recipient.trim().is_empty() {
+        return Err(ApiError::BadRequest(
+            "sender and recipient are required".into(),
+        ));
+    }
 
- // Check for duplicate by tx_hash
- // Use RocksDB to check if tx_hash already exists
- let tx_key = format!("tx_hash:{}", &incoming.tx_hash);
- if db_pool.get(tx_key.as_bytes()).map_err(|e| ApiError::Internal(e.to_string()))?.is_some() {
- info!("duplicate tx_hash submitted: {}", &incoming.tx_hash);
- return Err(ApiError::Duplicate);
- }
+    // Check for duplicate by tx_hash
+    // Use RocksDB to check if tx_hash already exists
+    let tx_key = format!("tx_hash:{}", &incoming.tx_hash);
+    if db_pool
+        .get(tx_key.as_bytes())
+        .map_err(|e| ApiError::Internal(e.to_string()))?
+        .is_some()
+    {
+        info!("duplicate tx_hash submitted: {}", &incoming.tx_hash);
+        return Err(ApiError::Duplicate);
+    }
 
- // Mandatory signature verification: if client included public_key/signature in payload,
- // Trace: Signature verification
+    // Mandatory signature verification: if client included public_key/signature in payload,
+    // Trace: Signature verification
 
- // verify signature over tx_hash using Ed25519 cryptographic verification.
- // SECURITY: No fallback - only real cryptographic verification accepted.
- if let Some(pubkey) = incoming.payload.get("public_key").and_then(|v| v.as_str()) {
- if let Some(sig) = incoming.payload.get("signature").and_then(|v| v.as_str()) {
- let message = incoming.tx_hash.as_bytes();
- // Always use real cryptographic verification - no shortcuts
- let ok = crate::crypto::verify_ed25519_hex(pubkey, sig, message);
- if !ok {
- return Err(ApiError::BadRequest("signature invalid".into()));
- }
- }
- }
+    // verify signature over tx_hash using Ed25519 cryptographic verification.
+    // SECURITY: No fallback - only real cryptographic verification accepted.
+    if let Some(pubkey) = incoming.payload.get("public_key").and_then(|v| v.as_str()) {
+        if let Some(sig) = incoming.payload.get("signature").and_then(|v| v.as_str()) {
+            let message = incoming.tx_hash.as_bytes();
+            // Always use real cryptographic verification - no shortcuts
+            let ok = crate::crypto::verify_ed25519_hex(pubkey, sig, message);
+            if !ok {
+                return Err(ApiError::BadRequest("signature invalid".into()));
+            }
+        }
+    }
 
     // Optionally check idempotency_key uniqueness
     if let Some(_key) = &incoming.idempotency_key {
@@ -313,56 +335,68 @@ async fn submit_tx(
         // If exists, return existing tx_id (idempotent behavior)
     }
 
- // TPS OPTIMIZATION: Queue transaction for batch processing instead of synchronous DB writes
- // This enables 20k-50k TPS by batching writes every 100ms or 500 transactions
- let tx_id = Uuid::new_v4();
+    // TPS OPTIMIZATION: Queue transaction for batch processing instead of synchronous DB writes
+    // This enables 20k-50k TPS by batching writes every 100ms or 500 transactions
+    let tx_id = Uuid::new_v4();
 
- // Extract fields for batch writer
- let amount = incoming.payload.get("amount")
- .and_then(|v| v.as_u64())
- .unwrap_or(0);
- let fee = incoming.payload.get("fee")
- .and_then(|v| v.as_u64())
- .unwrap_or(0);
- let public_key = incoming.payload.get("public_key")
- .and_then(|v| v.as_str())
- .unwrap_or("")
- .to_string();
+    // Extract fields for batch writer
+    let amount = incoming
+        .payload
+        .get("amount")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let fee = incoming
+        .payload
+        .get("fee")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let public_key = incoming
+        .payload
+        .get("public_key")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
- let pending_tx = crate::batch_writer::PendingTransaction {
- tx_id,
- tx_hash: incoming.tx_hash.clone(),
- sender: incoming.sender.clone(),
- recipient: incoming.recipient.clone(),
- payload: incoming.payload.clone(),
- signature: incoming.signature.clone(),
- amount,
- fee,
- public_key,
- };
+    let pending_tx = crate::batch_writer::PendingTransaction {
+        tx_id,
+        tx_hash: incoming.tx_hash.clone(),
+        sender: incoming.sender.clone(),
+        recipient: incoming.recipient.clone(),
+        payload: incoming.payload.clone(),
+        signature: incoming.signature.clone(),
+        amount,
+        fee,
+        public_key,
+    };
 
- // Submit to batch writer (non-blocking, returns immediately)
- if let Err(e) = batch_writer.submit(pending_tx).await {
- return Err(ApiError::BadRequest(format!("Failed to queue transaction: {}", e)));
- }
+    // Submit to batch writer (non-blocking, returns immediately)
+    if let Err(e) = batch_writer.submit(pending_tx).await {
+        return Err(ApiError::BadRequest(format!(
+            "Failed to queue transaction: {}",
+            e
+        )));
+    }
 
- info!(" Queued tx {} for batch processing (sender: {})", tx_id, &incoming.sender);
+    info!(
+        " Queued tx {} for batch processing (sender: {})",
+        tx_id, &incoming.sender
+    );
 
- let resp = TxSubmitResponse {
- tx_id,
- status: "pending",
- };
- Ok((StatusCode::ACCEPTED, Json(resp)))
+    let resp = TxSubmitResponse {
+        tx_id,
+        status: "pending",
+    };
+    Ok((StatusCode::ACCEPTED, Json(resp)))
 }
 
 ///////////////////////////////////////////////////////////////////////////
 // GET /mempool
 ///////////////////////////////////////////////////////////////////////////
 async fn get_mempool(Extension(_db): Extension<Arc<RocksDb>>) -> ApiResult {
- // TODO_ROCKSDB: Implement mempool querying with RocksDB
- // For now, return empty array
- let out: Vec<JsonValue> = Vec::new();
- Ok((StatusCode::OK, Json(out)).into_response())
+    // TODO_ROCKSDB: Implement mempool querying with RocksDB
+    // For now, return empty array
+    let out: Vec<JsonValue> = Vec::new();
+    Ok((StatusCode::OK, Json(out)).into_response())
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -370,127 +404,148 @@ async fn get_mempool(Extension(_db): Extension<Arc<RocksDb>>) -> ApiResult {
 // GET /tx/hash/:hash
 ///////////////////////////////////////////////////////////////////////////
 async fn get_tx_by_id_or_hash(
- Path(id): Path<String>,
- Extension(db_pool): Extension<Arc<RocksDb>>,
+    Path(id): Path<String>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
 ) -> ApiResult {
- // if it looks like a UUID, try uuid lookup
- if id.contains('-') {
- if let Ok(uuid) = Uuid::parse_str(&id) {
- return get_tx_by_id_inner(uuid, &db_pool).await;
- }
- }
- // otherwise fall back to hash lookup
- get_tx_by_hash_inner(&id, &db_pool).await
+    // if it looks like a UUID, try uuid lookup
+    if id.contains('-') {
+        if let Ok(uuid) = Uuid::parse_str(&id) {
+            return get_tx_by_id_inner(uuid, &db_pool).await;
+        }
+    }
+    // otherwise fall back to hash lookup
+    get_tx_by_hash_inner(&id, &db_pool).await
 }
 
 async fn get_tx_by_hash(
- Path(hash): Path<String>,
- Extension(db_pool): Extension<Arc<RocksDb>>,
+    Path(hash): Path<String>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
 ) -> ApiResult {
- get_tx_by_hash_inner(&hash, &db_pool).await
+    get_tx_by_hash_inner(&hash, &db_pool).await
 }
 
 async fn get_tx_by_id_inner(_uuid: Uuid, _db_pool: &Arc<RocksDb>) -> ApiResult {
- // TODO_ROCKSDB: Implement transaction lookup by ID with RocksDB
- Ok((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "tx not found - RocksDB not implemented" }))).into_response())
+    // TODO_ROCKSDB: Implement transaction lookup by ID with RocksDB
+    Ok((
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({ "error": "tx not found - RocksDB not implemented" })),
+    )
+        .into_response())
 }
 
 async fn get_tx_by_hash_inner(_hash: &str, _db_pool: &Arc<RocksDb>) -> ApiResult {
- // TODO_ROCKSDB: Implement transaction lookup by hash with RocksDB
- Ok((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "tx not found - RocksDB not implemented" }))).into_response())
+    // TODO_ROCKSDB: Implement transaction lookup by hash with RocksDB
+    Ok((
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({ "error": "tx not found - RocksDB not implemented" })),
+    )
+        .into_response())
 }
-
 
 ///////////////////////////////////////////////////////////////////////////
 // GET /proof/:tx (lookup tx_index)
 ///////////////////////////////////////////////////////////////////////////
 async fn get_proof_by_tx(
- Path(_tx): Path<String>,
- Extension(_db): Extension<Arc<RocksDb>>,
+    Path(_tx): Path<String>,
+    Extension(_db): Extension<Arc<RocksDb>>,
 ) -> ApiResult {
- // TODO_ROCKSDB: Implement proof lookup with RocksDB
- Ok((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "proof not found - RocksDB not implemented" }))).into_response())
+    // TODO_ROCKSDB: Implement proof lookup with RocksDB
+    Ok((
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({ "error": "proof not found - RocksDB not implemented" })),
+    )
+        .into_response())
 }
-
 
 ///////////////////////////////////////////////////////////////////////////
 // GET /block/:id -- placeholder; adapt to your block schema if needed
 ///////////////////////////////////////////////////////////////////////////
 async fn get_block_by_id(
- Path(id): Path<String>,
- Extension(_db_pool): Extension<Arc<RocksDb>>,
+    Path(id): Path<String>,
+    Extension(_db_pool): Extension<Arc<RocksDb>>,
 ) -> ApiResult {
- // Try to read block from RocksDB (if you persist blocks under key "block:<id>")
- let rocks_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "sled_data".into());
+    // Try to read block from RocksDB (if you persist blocks under key "block:<id>")
+    let rocks_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "sled_data".into());
 
- // open_db returns the DB handle (not a Result) — call it directly
- let db = open_db(&rocks_path);
+    // open_db returns the DB handle (not a Result) — call it directly
+    let db = open_db(&rocks_path);
 
- // attempt to read the key
- let key = format!("block:{}", id);
- match get_str::<serde_json::Value>(&db, &key) {
- Ok(Some(val)) => {
- return Ok((StatusCode::OK, Json(val)).into_response());
- }
- Ok(None) => {
- // not found
- return Ok((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "block not found" }))).into_response());
- }
- Err(e) => {
- eprintln!("get_block_by_id: rocksdb read error: {:?}", e);
- return Ok((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
- "error": "rocksdb read error"
- }))).into_response());
- }
- }
+    // attempt to read the key
+    let key = format!("block:{}", id);
+    match get_str::<serde_json::Value>(&db, &key) {
+        Ok(Some(val)) => {
+            return Ok((StatusCode::OK, Json(val)).into_response());
+        }
+        Ok(None) => {
+            // not found
+            return Ok((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "block not found" })),
+            )
+                .into_response());
+        }
+        Err(e) => {
+            eprintln!("get_block_by_id: rocksdb read error: {:?}", e);
+            return Ok((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                "error": "rocksdb read error"
+                })),
+            )
+                .into_response());
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////
 // GET /health - Basic health check
 ///////////////////////////////////////////////////////////////////////////
 async fn health(Extension(_db): Extension<Arc<RocksDb>>) -> ApiResult {
- // TODO_ROCKSDB: Add RocksDB health check
- Ok((StatusCode::OK, Json(serde_json::json!({"status":"ok"}))).into_response())
+    // TODO_ROCKSDB: Add RocksDB health check
+    Ok((StatusCode::OK, Json(serde_json::json!({"status":"ok"}))).into_response())
 }
 
 ///////////////////////////////////////////////////////////////////////////
 // GET /health/detailed - Detailed health diagnostics
 ///////////////////////////////////////////////////////////////////////////
 async fn health_detailed(
- Extension(_db): Extension<Arc<RocksDb>>,
- Extension(peer_store): Extension<crate::network::PeerStore>,
+    Extension(_db): Extension<Arc<RocksDb>>,
+    Extension(peer_store): Extension<crate::network::PeerStore>,
 ) -> ApiResult {
- // TODO_ROCKSDB: Implement detailed health check with RocksDB
- let health_status = serde_json::json!({
- "status": "healthy",
- "timestamp": chrono::Utc::now().to_rfc3339(),
- "checks": {
- "database": {"status": "ok", "message": "RocksDB not yet checked"},
- "peers": {"status": "ok", "count": peer_store.lock().await.len()}
- }
- });
- Ok((StatusCode::OK, Json(health_status)).into_response())
+    // TODO_ROCKSDB: Implement detailed health check with RocksDB
+    let health_status = serde_json::json!({
+    "status": "healthy",
+    "timestamp": chrono::Utc::now().to_rfc3339(),
+    "checks": {
+    "database": {"status": "ok", "message": "RocksDB not yet checked"},
+    "peers": {"status": "ok", "count": peer_store.lock().await.len()}
+    }
+    });
+    Ok((StatusCode::OK, Json(health_status)).into_response())
 }
 
 /// GET /peers - returns the runtime peer store as JSON array (full metadata)
 async fn get_peers(
- Extension(peer_store): Extension<crate::network::PeerStore>
+    Extension(peer_store): Extension<crate::network::PeerStore>,
 ) -> Result<impl IntoResponse, ApiError> {
- let store = peer_store.lock().await;
- let out: Vec<_> = store.iter().map(|e| {
- serde_json::json!({
- "addr": e.addr,
- "last_seen": e.last_seen_unix,
- "failures": e.failures,
- "banned_until": e.banned_until_unix,
- })
- }).collect();
- Ok((StatusCode::OK, Json(out)))
+    let store = peer_store.lock().await;
+    let out: Vec<_> = store
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+            "addr": e.addr,
+            "last_seen": e.last_seen_unix,
+            "failures": e.failures,
+            "banned_until": e.banned_until_unix,
+            })
+        })
+        .collect();
+    Ok((StatusCode::OK, Json(out)))
 }
 
 /// Get network statistics
 async fn get_network_stats(
-    Extension(peer_store): Extension<crate::network::PeerStore>
+    Extension(peer_store): Extension<crate::network::PeerStore>,
 ) -> Result<impl IntoResponse, ApiError> {
     let (active_conns, _dedupe, _peer_count) = crate::network::get_p2p_metrics();
     let store = peer_store.lock().await;
@@ -499,19 +554,24 @@ async fn get_network_stats(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let active_peers = store.iter().filter(|p| {
-        p.last_seen_unix.unwrap_or(0) > now.saturating_sub(300)
-    }).count();
-    let banned_peers = store.iter().filter(|p| {
-        p.banned_until_unix.unwrap_or(0) > now
-    }).count();
+    let active_peers = store
+        .iter()
+        .filter(|p| p.last_seen_unix.unwrap_or(0) > now.saturating_sub(300))
+        .count();
+    let banned_peers = store
+        .iter()
+        .filter(|p| p.banned_until_unix.unwrap_or(0) > now)
+        .count();
 
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "total_peers": total_peers,
-        "active_peers": active_peers,
-        "active_connections": active_conns,
-        "banned_peers": banned_peers,
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "total_peers": total_peers,
+            "active_peers": active_peers,
+            "active_connections": active_conns,
+            "banned_peers": banned_peers,
+        })),
+    ))
 }
 
 /// Get recent slashing events
@@ -519,94 +579,115 @@ async fn get_network_stats(
 /// Returns the most recent slashing events across all validators.
 /// Query parameter `limit` controls how many events to return (default: 50, max: 500).
 async fn get_slashing_events(
- Extension(db_pool): Extension<Arc<RocksDb>>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
 ) -> Result<impl IntoResponse, ApiError> {
- let slashing_manager = SlashingManager::new(db_pool);
+    let slashing_manager = SlashingManager::new(db_pool);
 
- // Default limit of 50, max 500
- let limit = 50;
+    // Default limit of 50, max 500
+    let limit = 50;
 
- match slashing_manager.get_recent_slashing_events(limit).await {
- Ok(events) => {
- let json_events: Vec<serde_json::Value> = events.iter().map(|e| {
- serde_json::json!({
- "validator_id": e.validator_id,
- "reason": e.reason,
- "severity": e.severity,
- "stake_before": e.stake_before,
- "slashed_amount": e.slashed_amount,
- "stake_after": e.stake_after,
- "slashed_at": e.slashed_at,
- "evidence": e.evidence,
- })
- }).collect();
+    match slashing_manager.get_recent_slashing_events(limit).await {
+        Ok(events) => {
+            let json_events: Vec<serde_json::Value> = events
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                    "validator_id": e.validator_id,
+                    "reason": e.reason,
+                    "severity": e.severity,
+                    "stake_before": e.stake_before,
+                    "slashed_amount": e.slashed_amount,
+                    "stake_after": e.stake_after,
+                    "slashed_at": e.slashed_at,
+                    "evidence": e.evidence,
+                    })
+                })
+                .collect();
 
- Ok((StatusCode::OK, Json(json_events)))
- }
- Err(e) => {
- error!("Failed to fetch slashing events: {}", e);
- Err(ApiError::Internal(format!("Failed to fetch slashing events: {}", e)))
- }
- }
+            Ok((StatusCode::OK, Json(json_events)))
+        }
+        Err(e) => {
+            error!("Failed to fetch slashing events: {}", e);
+            Err(ApiError::Internal(format!(
+                "Failed to fetch slashing events: {}",
+                e
+            )))
+        }
+    }
 }
 
 /// Get slashing history for a specific validator
 ///
 /// Returns all slashing events for the specified validator ID.
 async fn get_validator_slashing_history(
- Path(validator_id): Path<String>,
- Extension(db_pool): Extension<Arc<RocksDb>>,
+    Path(validator_id): Path<String>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
 ) -> Result<impl IntoResponse, ApiError> {
- let slashing_manager = SlashingManager::new(db_pool);
+    let slashing_manager = SlashingManager::new(db_pool);
 
- match slashing_manager.get_slashing_history(&validator_id).await {
- Ok(events) => {
- let json_events: Vec<serde_json::Value> = events.iter().map(|e| {
- serde_json::json!({
- "validator_id": e.validator_id,
- "reason": e.reason,
- "severity": e.severity,
- "stake_before": e.stake_before,
- "slashed_amount": e.slashed_amount,
- "stake_after": e.stake_after,
- "slashed_at": e.slashed_at,
- "evidence": e.evidence,
- })
- }).collect();
+    match slashing_manager.get_slashing_history(&validator_id).await {
+        Ok(events) => {
+            let json_events: Vec<serde_json::Value> = events
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                    "validator_id": e.validator_id,
+                    "reason": e.reason,
+                    "severity": e.severity,
+                    "stake_before": e.stake_before,
+                    "slashed_amount": e.slashed_amount,
+                    "stake_after": e.stake_after,
+                    "slashed_at": e.slashed_at,
+                    "evidence": e.evidence,
+                    })
+                })
+                .collect();
 
- Ok((StatusCode::OK, Json(serde_json::json!({
- "validator_id": validator_id,
- "total_events": json_events.len(),
- "events": json_events,
- }))))
- }
- Err(e) => {
- error!("Failed to fetch slashing history for {}: {}", validator_id, e);
- Err(ApiError::Internal(format!("Failed to fetch slashing history: {}", e)))
- }
- }
+            Ok((
+                StatusCode::OK,
+                Json(serde_json::json!({
+                "validator_id": validator_id,
+                "total_events": json_events.len(),
+                "events": json_events,
+                })),
+            ))
+        }
+        Err(e) => {
+            error!(
+                "Failed to fetch slashing history for {}: {}",
+                validator_id, e
+            );
+            Err(ApiError::Internal(format!(
+                "Failed to fetch slashing history: {}",
+                e
+            )))
+        }
+    }
 }
 
 /// Get current validator stakes
 ///
 /// Returns the current stake amounts for all validators.
 async fn get_validator_stakes(
- Extension(_db): Extension<Arc<RocksDb>>,
+    Extension(_db): Extension<Arc<RocksDb>>,
 ) -> Result<impl IntoResponse, ApiError> {
- // TODO_ROCKSDB: Implement validator stakes query with RocksDB
- let stakes: Vec<serde_json::Value> = Vec::new();
- Ok((StatusCode::OK, Json(serde_json::json!({
- "total_validators": 0,
- "stakes": stakes,
- }))))
+    // TODO_ROCKSDB: Implement validator stakes query with RocksDB
+    let stakes: Vec<serde_json::Value> = Vec::new();
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+        "total_validators": 0,
+        "stakes": stakes,
+        })),
+    ))
 }
 
 /// Request body for announcing key rotation
 #[derive(Deserialize)]
 struct AnnounceKeyRotationRequest {
- validator_id: String,
- old_private_key_hex: String,
- new_public_key_hex: String,
+    validator_id: String,
+    old_private_key_hex: String,
+    new_public_key_hex: String,
 }
 
 /// Announce a new validator key rotation
@@ -616,40 +697,45 @@ struct AnnounceKeyRotationRequest {
 /// Allows a validator to announce a new key rotation with a 24-hour transition period.
 /// The new key must be signed by the old key as proof of authority.
 async fn announce_key_rotation(
- Extension(db_pool): Extension<Arc<RocksDb>>,
- Json(request): Json<AnnounceKeyRotationRequest>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
+    Json(request): Json<AnnounceKeyRotationRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
- let key_rotation_manager = KeyRotationManager::new(db_pool);
+    let key_rotation_manager = KeyRotationManager::new(db_pool);
 
- match key_rotation_manager.announce_rotation(
- &request.validator_id,
- &request.new_public_key_hex,
- 0,  // effective_block placeholder
- ).await {
- Ok(announcement) => {
- info!(
- "SYNC Key rotation announced: {} (transition ends at: {})",
- request.validator_id,
- announcement.transition_ends_at
- );
+    match key_rotation_manager
+        .announce_rotation(
+            &request.validator_id,
+            &request.new_public_key_hex,
+            0, // effective_block placeholder
+        )
+        .await
+    {
+        Ok(announcement) => {
+            info!(
+                "SYNC Key rotation announced: {} (transition ends at: {})",
+                request.validator_id, announcement.transition_ends_at
+            );
 
- Ok((StatusCode::OK, Json(serde_json::json!({
- "success": true,
- "announcement": {
- "validator_id": announcement.validator_id,
- "old_public_key": announcement.old_public_key,
- "new_public_key": announcement.new_public_key,
- "announced_at": announcement.announced_at,
- "transition_ends_at": announcement.transition_ends_at,
- "status": format!("{:?}", announcement.status),
- }
- }))))
- }
- Err(e) => {
- error!("Failed to announce key rotation: {}", e);
- Err(ApiError::BadRequest(format!("Key rotation failed: {}", e)))
- }
- }
+            Ok((
+                StatusCode::OK,
+                Json(serde_json::json!({
+                "success": true,
+                "announcement": {
+                "validator_id": announcement.validator_id,
+                "old_public_key": announcement.old_public_key,
+                "new_public_key": announcement.new_public_key,
+                "announced_at": announcement.announced_at,
+                "transition_ends_at": announcement.transition_ends_at,
+                "status": format!("{:?}", announcement.status),
+                }
+                })),
+            ))
+        }
+        Err(e) => {
+            error!("Failed to announce key rotation: {}", e);
+            Err(ApiError::BadRequest(format!("Key rotation failed: {}", e)))
+        }
+    }
 }
 
 /// Get active key rotation for a validator
@@ -658,137 +744,160 @@ async fn announce_key_rotation(
 ///
 /// Returns the current active key rotation (if any) for the specified validator.
 async fn get_key_rotation(
- Path(validator_id): Path<String>,
- Extension(db_pool): Extension<Arc<RocksDb>>,
+    Path(validator_id): Path<String>,
+    Extension(db_pool): Extension<Arc<RocksDb>>,
 ) -> Result<impl IntoResponse, ApiError> {
- let key_rotation_manager = KeyRotationManager::new(db_pool);
+    let key_rotation_manager = KeyRotationManager::new(db_pool);
 
- match key_rotation_manager.get_active_rotation(&validator_id).await {
- Ok(Some(rotation)) => {
- Ok((StatusCode::OK, Json(serde_json::json!({
- "validator_id": rotation.validator_id,
- "old_public_key": rotation.old_public_key,
- "new_public_key": rotation.new_public_key,
- "signature": rotation.signature,
- "announced_at": rotation.announced_at,
- "transition_ends_at": rotation.transition_ends_at,
- "status": format!("{:?}", rotation.status),
- }))))
- }
- Ok(None) => {
- Ok((StatusCode::OK, Json(serde_json::json!({
- "validator_id": validator_id,
- "has_active_rotation": false,
- "message": "No active key rotation found"
- }))))
- }
- Err(e) => {
- error!("Failed to fetch key rotation: {}", e);
- Err(ApiError::Internal(format!("Failed to fetch key rotation: {}", e)))
- }
- }
+    match key_rotation_manager
+        .get_active_rotation(&validator_id)
+        .await
+    {
+        Ok(Some(rotation)) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+            "validator_id": rotation.validator_id,
+            "old_public_key": rotation.old_public_key,
+            "new_public_key": rotation.new_public_key,
+            "signature": rotation.signature,
+            "announced_at": rotation.announced_at,
+            "transition_ends_at": rotation.transition_ends_at,
+            "status": format!("{:?}", rotation.status),
+            })),
+        )),
+        Ok(None) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+            "validator_id": validator_id,
+            "has_active_rotation": false,
+            "message": "No active key rotation found"
+            })),
+        )),
+        Err(e) => {
+            error!("Failed to fetch key rotation: {}", e);
+            Err(ApiError::Internal(format!(
+                "Failed to fetch key rotation: {}",
+                e
+            )))
+        }
+    }
 }
 
 /// Query parameters for security alerts
 #[derive(Deserialize)]
 struct AlertQuery {
- /// Limit number of results (default: 50, max: 500)
- #[serde(default = "default_limit")]
- limit: usize,
- /// Filter by severity (optional)
- severity: Option<String>,
+    /// Limit number of results (default: 50, max: 500)
+    #[serde(default = "default_limit")]
+    limit: usize,
+    /// Filter by severity (optional)
+    severity: Option<String>,
 }
 
 fn default_limit() -> usize {
- 50
+    50
 }
 
 /// Get security alerts from IDS
 ///
 /// Returns recent security alerts with optional severity filtering.
 async fn get_security_alerts(
- Query(query): Query<AlertQuery>,
- Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
+    Query(query): Query<AlertQuery>,
+    Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
 ) -> Result<impl IntoResponse, ApiError> {
- let limit = std::cmp::min(query.limit, 500); // Max 500 alerts
+    let limit = std::cmp::min(query.limit, 500); // Max 500 alerts
 
- let alerts = if let Some(severity_str) = query.severity {
- // Filter by severity
- let severity = match severity_str.to_lowercase().as_str() {
- "low" => AlertSeverity::Low,
- "medium" => AlertSeverity::Medium,
- "high" => AlertSeverity::High,
- "critical" => AlertSeverity::Critical,
- _ => {
- return Err(ApiError::BadRequest(
- "Invalid severity. Use: low, medium, high, or critical".to_string()
- ));
- }
- };
+    let alerts = if let Some(severity_str) = query.severity {
+        // Filter by severity
+        let severity = match severity_str.to_lowercase().as_str() {
+            "low" => AlertSeverity::Low,
+            "medium" => AlertSeverity::Medium,
+            "high" => AlertSeverity::High,
+            "critical" => AlertSeverity::Critical,
+            _ => {
+                return Err(ApiError::BadRequest(
+                    "Invalid severity. Use: low, medium, high, or critical".to_string(),
+                ));
+            }
+        };
 
- ids.get_alerts_by_severity(severity)
- } else {
- // Get all recent alerts
- ids.get_recent_alerts(limit)
- };
+        ids.get_alerts_by_severity(severity)
+    } else {
+        // Get all recent alerts
+        ids.get_recent_alerts(limit)
+    };
 
- let json_alerts: Vec<serde_json::Value> = alerts.iter().map(|a| {
- serde_json::json!({
- "id": a.id,
- "threat_type": format!("{:?}", a.threat_type),
- "severity": format!("{:?}", a.severity),
- "source": a.source,
- "timestamp": a.timestamp,
- "description": a.description,
- "event_count": a.event_count,
- })
- }).collect();
+    let json_alerts: Vec<serde_json::Value> = alerts
+        .iter()
+        .map(|a| {
+            serde_json::json!({
+            "id": a.id,
+            "threat_type": format!("{:?}", a.threat_type),
+            "severity": format!("{:?}", a.severity),
+            "source": a.source,
+            "timestamp": a.timestamp,
+            "description": a.description,
+            "event_count": a.event_count,
+            })
+        })
+        .collect();
 
- Ok((StatusCode::OK, Json(serde_json::json!({
- "total_alerts": json_alerts.len(),
- "alerts": json_alerts,
- }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+        "total_alerts": json_alerts.len(),
+        "alerts": json_alerts,
+        })),
+    ))
 }
 
 /// Get active threats from IDS
 ///
 /// Returns currently active threat patterns being monitored.
 async fn get_active_threats(
- Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
+    Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
 ) -> Result<impl IntoResponse, ApiError> {
- let threats = ids.get_active_threats();
+    let threats = ids.get_active_threats();
 
- let json_threats: Vec<serde_json::Value> = threats.iter().map(|threat| {
- serde_json::json!({
- "source": &threat.source,
- "threat_type": format!("{:?}", &threat.threat_type),
- "event_count": threat.count,
- })
- }).collect();
+    let json_threats: Vec<serde_json::Value> = threats
+        .iter()
+        .map(|threat| {
+            serde_json::json!({
+            "source": &threat.source,
+            "threat_type": format!("{:?}", &threat.threat_type),
+            "event_count": threat.count,
+            })
+        })
+        .collect();
 
- Ok((StatusCode::OK, Json(serde_json::json!({
- "total_threats": json_threats.len(),
- "active_threats": json_threats,
- }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+        "total_threats": json_threats.len(),
+        "active_threats": json_threats,
+        })),
+    ))
 }
 
 /// Get Prometheus metrics
 ///
 /// Returns metrics in Prometheus text format for scraping.
 async fn get_metrics() -> Result<impl IntoResponse, ApiError> {
- let prometheus_output = METRICS.export_prometheus();
+    let prometheus_output = METRICS.export_prometheus();
 
- Ok((
- StatusCode::OK,
- [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
- prometheus_output
- ))
+    Ok((
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4",
+        )],
+        prometheus_output,
+    ))
 }
 
 #[allow(dead_code)]
 fn verify_signature(_payload: &JsonValue, _signature: Option<String>) -> Result<(), String> {
- // placeholder for future more complex verification
- Ok(())
+    // placeholder for future more complex verification
+    Ok(())
 }
 
 /// Build router for this microservice (call from main)
@@ -798,64 +907,61 @@ fn verify_signature(_payload: &JsonValue, _signature: Option<String>) -> Result<
 /// SECURITY: API key authentication required for all endpoints except public read-only ones.
 /// Transaction signatures provide additional security at the transaction level.
 pub async fn auth_middleware<B>(
- ConnectInfo(addr): ConnectInfo<SocketAddr>,
- Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
- req: Request<B>,
- next: Next<B>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
+    req: Request<B>,
+    next: Next<B>,
 ) -> Result<Response, StatusCode> {
- let path = req.uri().path();
+    let path = req.uri().path();
 
- // Public endpoints that don't require API key
- let public_endpoints = [
- "/health",
- "/metrics",
- "/api/balance/", // Allow balance queries (read-only)
- ];
+    // Public endpoints that don't require API key
+    let public_endpoints = [
+        "/health",
+        "/metrics",
+        "/api/balance/", // Allow balance queries (read-only)
+    ];
 
- // Check if this is a public endpoint
- if public_endpoints.iter().any(|p| path.starts_with(p)) {
- return Ok(next.run(req).await);
- }
+    // Check if this is a public endpoint
+    if public_endpoints.iter().any(|p| path.starts_with(p)) {
+        return Ok(next.run(req).await);
+    }
 
- // Extract API key from Authorization header or query parameter
- let api_key = req
- .headers()
- .get("Authorization")
- .and_then(|h| h.to_str().ok())
- .and_then(|s| s.strip_prefix("Bearer "))
- .or_else(|| {
- req.uri()
- .query()
- .and_then(|q| {
- q.split('&')
- .find(|p| p.starts_with("api_key="))
- .and_then(|p| p.strip_prefix("api_key="))
- })
- });
+    // Extract API key from Authorization header or query parameter
+    let api_key = req
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .or_else(|| {
+            req.uri().query().and_then(|q| {
+                q.split('&')
+                    .find(|p| p.starts_with("api_key="))
+                    .and_then(|p| p.strip_prefix("api_key="))
+            })
+        });
 
- // Get valid API keys from environment
- let api_keys_str = std::env::var("API_KEYS").unwrap_or_default();
- let valid_keys: Vec<&str> = api_keys_str
- .split(',')
- .map(|s| s.trim())
- .filter(|s| !s.is_empty())
- .collect();
+    // Get valid API keys from environment
+    let api_keys_str = std::env::var("API_KEYS").unwrap_or_default();
+    let valid_keys: Vec<&str> = api_keys_str
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
 
- // Check if API key is valid using constant-time comparison
- // This prevents timing attacks where attackers can guess keys character by character
- if let Some(key) = api_key {
- let key_bytes = key.as_bytes();
- let is_valid = valid_keys.iter().any(|valid_key| {
-     let valid_bytes = valid_key.as_bytes();
-     // Only compare if lengths match (length is not secret in this context)
-     // Use constant-time comparison for the actual bytes
-     key_bytes.len() == valid_bytes.len() &&
-     key_bytes.ct_eq(valid_bytes).into()
- });
- if is_valid {
-     return Ok(next.run(req).await);
- }
- }
+    // Check if API key is valid using constant-time comparison
+    // This prevents timing attacks where attackers can guess keys character by character
+    if let Some(key) = api_key {
+        let key_bytes = key.as_bytes();
+        let is_valid = valid_keys.iter().any(|valid_key| {
+            let valid_bytes = valid_key.as_bytes();
+            // Only compare if lengths match (length is not secret in this context)
+            // Use constant-time comparison for the actual bytes
+            key_bytes.len() == valid_bytes.len() && key_bytes.ct_eq(valid_bytes).into()
+        });
+        if is_valid {
+            return Ok(next.run(req).await);
+        }
+    }
 
     // No valid API key provided - record security event
     let source = addr.ip().to_string();
@@ -871,10 +977,7 @@ pub async fn auth_middleware<B>(
 /// Distributed tracing and logging middleware.
 ///
 /// Logs all HTTP requests with timing information.
-async fn tracing_middleware<B>(
-    req: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode> {
+async fn tracing_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
     let start = std::time::Instant::now();
@@ -907,34 +1010,34 @@ async fn tracing_middleware<B>(
 /// - `RATE_LIMIT_MAX_REQUESTS`: Maximum requests per window (default: 100)
 /// - `RATE_LIMIT_WINDOW_SECS`: Time window in seconds (default: 60)
 async fn rate_limit_middleware<B>(
- ConnectInfo(addr): ConnectInfo<SocketAddr>,
- Extension(rate_limiter): Extension<RateLimiter>,
- Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
- req: Request<B>,
- next: Next<B>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(rate_limiter): Extension<RateLimiter>,
+    Extension(ids): Extension<Arc<IntrusionDetectionSystem>>,
+    req: Request<B>,
+    next: Next<B>,
 ) -> Result<Response, StatusCode> {
- let ip = addr.ip();
+    let ip = addr.ip();
 
- if rate_limiter.check_rate_limit(&ip) {
- // Request allowed
- METRICS.inc_http_requests();
- Ok(next.run(req).await)
- } else {
- // Rate limit exceeded - record security event
- let ip_str = ip.to_string();
- warn!("BLOCKED Rate limit exceeded for IP: {}", ip_str);
+    if rate_limiter.check_rate_limit(&ip) {
+        // Request allowed
+        METRICS.inc_http_requests();
+        Ok(next.run(req).await)
+    } else {
+        // Rate limit exceeded - record security event
+        let ip_str = ip.to_string();
+        warn!("BLOCKED Rate limit exceeded for IP: {}", ip_str);
 
- // Record rate limit violation in IDS
- ids.record_event(
- &ip_str,
- ThreatType::RateLimitViolation,
- AlertSeverity::Medium,
- "Exceeded request rate limit",
- );
- METRICS.inc_http_errors();
+        // Record rate limit violation in IDS
+        ids.record_event(
+            &ip_str,
+            ThreatType::RateLimitViolation,
+            AlertSeverity::Medium,
+            "Exceeded request rate limit",
+        );
+        METRICS.inc_http_errors();
 
- Err(StatusCode::TOO_MANY_REQUESTS)
- }
+        Err(StatusCode::TOO_MANY_REQUESTS)
+    }
 }
 
 /// Submit a heartbeat from a node
@@ -942,11 +1045,13 @@ async fn submit_heartbeat(
     Extension(db): Extension<RocksDb>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let node_id = payload.get("node_id")
+    let node_id = payload
+        .get("node_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::BadRequest("Missing node_id".to_string()))?;
-    
-    let wallet_address = payload.get("wallet_address")
+
+    let wallet_address = payload
+        .get("wallet_address")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::BadRequest("Missing wallet_address".to_string()))?;
 
@@ -954,10 +1059,13 @@ async fn submit_heartbeat(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to record heartbeat: {}", e)))?;
 
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "status": "ok",
-        "message": "Heartbeat recorded"
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "ok",
+            "message": "Heartbeat recorded"
+        })),
+    ))
 }
 
 /// Claim rewards for a node
@@ -965,7 +1073,8 @@ async fn claim_rewards(
     Extension(db): Extension<RocksDb>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let node_id = payload.get("node_id")
+    let node_id = payload
+        .get("node_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::BadRequest("Missing node_id".to_string()))?;
 
@@ -975,12 +1084,15 @@ async fn claim_rewards(
 
     // TODO: Create a transaction to mint/transfer the reward
     // For now, just return the reward information
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "status": "ok",
-        "wallet_address": wallet_address,
-        "reward_amount": reward_amount,
-        "message": "Reward claimed successfully"
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "ok",
+            "wallet_address": wallet_address,
+            "reward_amount": reward_amount,
+            "message": "Reward claimed successfully"
+        })),
+    ))
 }
 
 /// Get node statistics
@@ -994,14 +1106,17 @@ async fn get_node_stats(
 
     let pending_rewards = crate::rewards::calculate_pending_rewards(&stats);
 
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "node_id": stats.node_id,
-        "wallet_address": stats.wallet_address,
-        "total_uptime_secs": stats.total_uptime_secs,
-        "last_heartbeat": stats.last_heartbeat,
-        "first_seen": stats.first_seen,
-        "pending_rewards": pending_rewards,
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "node_id": stats.node_id,
+            "wallet_address": stats.wallet_address,
+            "total_uptime_secs": stats.total_uptime_secs,
+            "last_heartbeat": stats.last_heartbeat,
+            "first_seen": stats.first_seen,
+            "pending_rewards": pending_rewards,
+        })),
+    ))
 }
 
 /// Get all active nodes
@@ -1012,10 +1127,13 @@ async fn get_active_nodes(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get active nodes: {}", e)))?;
 
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "active_nodes": nodes.len(),
-        "nodes": nodes,
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "active_nodes": nodes.len(),
+            "nodes": nodes,
+        })),
+    ))
 }
 pub fn router(
     db_peer_store: crate::network::PeerStore,
@@ -1037,56 +1155,59 @@ pub fn router(
 
     let rate_limiter = Arc::new(SimpleRateLimiter::new(max_requests as usize, window_secs));
 
- info!(
- "PROTECTED Rate limiting enabled: {} requests per {} seconds",
- max_requests, window_secs
- );
+    info!(
+        "PROTECTED Rate limiting enabled: {} requests per {} seconds",
+        max_requests, window_secs
+    );
 
- // Initialize Intrusion Detection System
- let ids = Arc::new(IntrusionDetectionSystem::new(db_pool.clone()));
+    // Initialize Intrusion Detection System
+    let ids = Arc::new(IntrusionDetectionSystem::new(db_pool.clone()));
 
- info!("DEBUG: Intrusion Detection System (IDS) initialized");
+    info!("DEBUG: Intrusion Detection System (IDS) initialized");
 
- // Prometheus metrics available via global METRICS static
+    // Prometheus metrics available via global METRICS static
 
- info!("STATS Prometheus metrics ready");
+    info!("STATS Prometheus metrics ready");
 
- // Public routes (no authentication required)
- let public_routes = Router::new()
- .route("/health", get(health))
- .route("/health/detailed", get(health_detailed))
- .route("/metrics", get(get_metrics)); // Prometheus metrics endpoint
+    // Public routes (no authentication required)
+    let public_routes = Router::new()
+        .route("/health", get(health))
+        .route("/health/detailed", get(health_detailed))
+        .route("/metrics", get(get_metrics)); // Prometheus metrics endpoint
 
- // Protected routes with rate limiting and authentication
- // Applies BOTH rate limiting and authentication (layers run bottom to top)
- let protected_routes = Router::new()
- .route("/tx/submit", post(submit_tx))
- .route("/mempool", get(get_mempool))
- .route("/tx/:id", get(get_tx_by_id_or_hash)) // accepts uuid or tx_hash; we try both
- .route("/tx/hash/:hash", get(get_tx_by_hash)) // explicit hash lookup
- .route("/block/:id", get(get_block_by_id)) // placeholder route
- .route("/proof/:tx", get(get_proof_by_tx))
- .route("/peers", get(get_peers))
- .route("/network/stats", get(get_network_stats))
- .route("/slashing/events", get(get_slashing_events)) // Query recent slashing events
- .route("/slashing/validator/:id", get(get_validator_slashing_history)) // Validator slashing history
- .route("/validators/stakes", get(get_validator_stakes)) // Current validator stakes
- .route("/validators/rotate-key", post(announce_key_rotation)) // Announce key rotation
- .route("/validators/:id/key-rotation", get(get_key_rotation)) // Query key rotation status
- .route("/security/alerts", get(get_security_alerts)) // Get security alerts from IDS
+    // Protected routes with rate limiting and authentication
+    // Applies BOTH rate limiting and authentication (layers run bottom to top)
+    let protected_routes = Router::new()
+        .route("/tx/submit", post(submit_tx))
+        .route("/mempool", get(get_mempool))
+        .route("/tx/:id", get(get_tx_by_id_or_hash)) // accepts uuid or tx_hash; we try both
+        .route("/tx/hash/:hash", get(get_tx_by_hash)) // explicit hash lookup
+        .route("/block/:id", get(get_block_by_id)) // placeholder route
+        .route("/proof/:tx", get(get_proof_by_tx))
+        .route("/peers", get(get_peers))
+        .route("/network/stats", get(get_network_stats))
+        .route("/slashing/events", get(get_slashing_events)) // Query recent slashing events
+        .route(
+            "/slashing/validator/:id",
+            get(get_validator_slashing_history),
+        ) // Validator slashing history
+        .route("/validators/stakes", get(get_validator_stakes)) // Current validator stakes
+        .route("/validators/rotate-key", post(announce_key_rotation)) // Announce key rotation
+        .route("/validators/:id/key-rotation", get(get_key_rotation)) // Query key rotation status
+        .route("/security/alerts", get(get_security_alerts)) // Get security alerts from IDS
         .route("/rewards/heartbeat", post(submit_heartbeat))
         .route("/rewards/claim", post(claim_rewards))
         .route("/rewards/stats/:node_id", get(get_node_stats))
         .route("/rewards/active", get(get_active_nodes))
- .route("/security/threats", get(get_active_threats)) // Get active threats
+        .route("/security/threats", get(get_active_threats)) // Get active threats
         .route("/oracle/submit", post(submit_oracle_data)) // Submit oracle data
         .route("/oracle/feed/:feed_id", get(get_oracle_feed)) // Get specific feed
         .route("/oracle/feeds", get(list_oracle_feeds)) // List all feeds
         .route("/oracle/node/:operator_id", get(get_oracle_node_info)) // Get node info
- .layer(middleware::from_fn(auth_middleware)) // Run second (outer layer)
- .layer(middleware::from_fn(rate_limit_middleware)) // Run first (inner layer)
- .layer(Extension(rate_limiter))
- .layer(Extension(ids.clone()));
+        .layer(middleware::from_fn(auth_middleware)) // Run second (outer layer)
+        .layer(middleware::from_fn(rate_limit_middleware)) // Run first (inner layer)
+        .layer(Extension(rate_limiter))
+        .layer(Extension(ids.clone()));
 
     // Combine all routes with global middleware
     // Middleware layers run bottom-to-top (LIFO)
@@ -1104,35 +1225,44 @@ pub fn router(
 // ============================================================================
 
 /// Submit oracle data
-async fn submit_oracle_data(
-    Json(payload): Json<JsonValue>,
-) -> Result<Json<JsonValue>, StatusCode> {
+async fn submit_oracle_data(Json(payload): Json<JsonValue>) -> Result<Json<JsonValue>, StatusCode> {
     // Parse oracle submission
-    let submission: crate::oracle::OracleSubmission = serde_json::from_value(payload)
-        .map_err(|e| {
+    let submission: crate::oracle::OracleSubmission =
+        serde_json::from_value(payload).map_err(|e| {
             error!("Failed to parse oracle submission: {}", e);
             StatusCode::BAD_REQUEST
         })?;
 
     // Get oracle manager
-    let oracle_manager = crate::oracle::get_oracle_manager()
-        .map_err(|e| {
-            error!("Failed to get oracle manager: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let oracle_manager = crate::oracle::get_oracle_manager().map_err(|e| {
+        error!("Failed to get oracle manager: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Submit data
-    oracle_manager.lock().await.submit_data(submission.clone()).await
+    oracle_manager
+        .lock()
+        .await
+        .submit_data(submission.clone())
+        .await
         .map_err(|e| {
             error!("Failed to submit oracle data: {}", e);
             StatusCode::BAD_REQUEST
         })?;
 
     // Aggregate feed if enough submissions
-    match oracle_manager.lock().await.aggregate_feed(&submission.feed_id).await {
+    match oracle_manager
+        .lock()
+        .await
+        .aggregate_feed(&submission.feed_id)
+        .await
+    {
         Ok(aggregated) => {
-            info!("Oracle feed aggregated: {} (confidence: {:.2}%)",
-                submission.feed_id, aggregated.confidence * 100.0);
+            info!(
+                "Oracle feed aggregated: {} (confidence: {:.2}%)",
+                submission.feed_id,
+                aggregated.confidence * 100.0
+            );
         }
         Err(e) => {
             // Not an error - might need more submissions
@@ -1148,13 +1278,15 @@ async fn submit_oracle_data(
 }
 
 /// Get oracle feed by ID
-async fn get_oracle_feed(
-    Path(feed_id): Path<String>,
-) -> Result<Json<JsonValue>, StatusCode> {
-    let oracle_manager = crate::oracle::get_oracle_manager()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+async fn get_oracle_feed(Path(feed_id): Path<String>) -> Result<Json<JsonValue>, StatusCode> {
+    let oracle_manager =
+        crate::oracle::get_oracle_manager().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let feed = oracle_manager.lock().await.get_feed(&feed_id).await
+    let feed = oracle_manager
+        .lock()
+        .await
+        .get_feed(&feed_id)
+        .await
         .ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(serde_json::json!({
@@ -1170,8 +1302,8 @@ async fn get_oracle_feed(
 
 /// List all oracle feeds
 async fn list_oracle_feeds() -> Result<Json<JsonValue>, StatusCode> {
-    let oracle_manager = crate::oracle::get_oracle_manager()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let oracle_manager =
+        crate::oracle::get_oracle_manager().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let feeds = oracle_manager.lock().await.list_feeds().await;
 

@@ -7,12 +7,12 @@
 //! - Point-in-time recovery
 //! - Backup verification
 
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::{Result, bail, Context};
-use serde::{Serialize, Deserialize};
 
 /// Backup metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,8 +59,7 @@ impl BackupManager {
 
         // Create backup directory if it doesn't exist
         if !backup_dir.exists() {
-            fs::create_dir_all(&backup_dir)
-                .context("Failed to create backup directory")?;
+            fs::create_dir_all(&backup_dir).context("Failed to create backup directory")?;
         }
 
         Ok(Self {
@@ -86,8 +85,7 @@ impl BackupManager {
         let backup_path = self.backup_dir.join(&backup_id);
 
         // Create backup directory
-        fs::create_dir_all(&backup_path)
-            .context("Failed to create backup subdirectory")?;
+        fs::create_dir_all(&backup_path).context("Failed to create backup subdirectory")?;
 
         // Copy all database files
         let (file_count, total_size) = self.copy_directory(db_path, &backup_path)?;
@@ -110,8 +108,7 @@ impl BackupManager {
         let metadata_path = backup_path.join("metadata.json");
         let metadata_json = serde_json::to_string_pretty(&metadata)
             .context("Failed to serialize backup metadata")?;
-        fs::write(&metadata_path, metadata_json)
-            .context("Failed to write backup metadata")?;
+        fs::write(&metadata_path, metadata_json).context("Failed to write backup metadata")?;
 
         // Cleanup old backups if needed
         self.cleanup_old_backups()?;
@@ -138,9 +135,9 @@ impl BackupManager {
         // Load and verify metadata
         let metadata_path = backup_path.join("metadata.json");
         let metadata: BackupMetadata = serde_json::from_str(
-            &fs::read_to_string(&metadata_path)
-                .context("Failed to read backup metadata")?
-        ).context("Failed to parse backup metadata")?;
+            &fs::read_to_string(&metadata_path).context("Failed to read backup metadata")?,
+        )
+        .context("Failed to parse backup metadata")?;
 
         // Verify checksum
         let current_checksum = self.calculate_directory_checksum(&backup_path)?;
@@ -151,7 +148,8 @@ impl BackupManager {
         // Create target directory if it doesn't exist
         if target_path.exists() {
             // Create a backup of the existing database before overwriting
-            let existing_backup = format!("pre_restore_{}",
+            let existing_backup = format!(
+                "pre_restore_{}",
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
@@ -162,21 +160,15 @@ impl BackupManager {
             log::info!("Created pre-restore backup: {}", existing_backup);
 
             // Remove existing database
-            fs::remove_dir_all(target_path)
-                .context("Failed to remove existing database")?;
+            fs::remove_dir_all(target_path).context("Failed to remove existing database")?;
         }
 
-        fs::create_dir_all(target_path)
-            .context("Failed to create target directory")?;
+        fs::create_dir_all(target_path).context("Failed to create target directory")?;
 
         // Copy backup files to target (excluding metadata.json)
         self.copy_directory_excluding(&backup_path, target_path, &["metadata.json"])?;
 
-        log::info!(
-            "Backup restored: {} -> {:?}",
-            backup_id,
-            target_path
-        );
+        log::info!("Backup restored: {} -> {:?}", backup_id, target_path);
 
         Ok(())
     }
@@ -219,8 +211,7 @@ impl BackupManager {
             bail!("Backup not found: {}", backup_id);
         }
 
-        fs::remove_dir_all(&backup_path)
-            .context("Failed to delete backup")?;
+        fs::remove_dir_all(&backup_path).context("Failed to delete backup")?;
 
         log::info!("Backup deleted: {}", backup_id);
         Ok(())
@@ -236,9 +227,7 @@ impl BackupManager {
 
         // Load metadata
         let metadata_path = backup_path.join("metadata.json");
-        let metadata: BackupMetadata = serde_json::from_str(
-            &fs::read_to_string(&metadata_path)?
-        )?;
+        let metadata: BackupMetadata = serde_json::from_str(&fs::read_to_string(&metadata_path)?)?;
 
         // Verify checksum
         let current_checksum = self.calculate_directory_checksum(&backup_path)?;
@@ -279,7 +268,12 @@ impl BackupManager {
         Ok((file_count, total_size))
     }
 
-    fn copy_directory_excluding(&self, src: &Path, dst: &Path, exclude: &[&str]) -> Result<(usize, u64)> {
+    fn copy_directory_excluding(
+        &self,
+        src: &Path,
+        dst: &Path,
+        exclude: &[&str],
+    ) -> Result<(usize, u64)> {
         let mut file_count = 0;
         let mut total_size = 0;
 
@@ -340,7 +334,11 @@ impl BackupManager {
             let path = entry.path();
 
             // Skip metadata.json for checksum calculation
-            if path.file_name().map(|n| n == "metadata.json").unwrap_or(false) {
+            if path
+                .file_name()
+                .map(|n| n == "metadata.json")
+                .unwrap_or(false)
+            {
                 continue;
             }
 
@@ -424,7 +422,9 @@ mod tests {
 
         // Restore to new location
         let restore_path = temp_dir.path().join("restored");
-        manager.restore_backup(&metadata.backup_id, &restore_path).unwrap();
+        manager
+            .restore_backup(&metadata.backup_id, &restore_path)
+            .unwrap();
 
         // Verify restored data
         let restored_data = fs::read_to_string(restore_path.join("data.txt")).unwrap();

@@ -2,10 +2,10 @@
 // Node reward system: 1 OURO per day for running nodes
 // Sustainable inflation: 10,000 nodes = 3.65M OURO/year = 3.65% of 100M supply
 
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 use crate::storage::RocksDb;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Reward rate: 1 OURO per day = 100_000_000 microunits per day
 /// This provides 365 OURO/year per node - sustainable incentive
@@ -82,10 +82,7 @@ pub async fn record_heartbeat(
 }
 
 /// Claim rewards for a node
-pub async fn claim_rewards(
-    db: &RocksDb,
-    node_id: &str,
-) -> Result<(String, u64), String> {
+pub async fn claim_rewards(db: &RocksDb, node_id: &str) -> Result<(String, u64), String> {
     let key = format!("heartbeat:{}", node_id);
 
     // Get heartbeat

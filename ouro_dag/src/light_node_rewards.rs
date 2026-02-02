@@ -8,9 +8,9 @@
 //!
 //! No stake required - prove your value through actions.
 
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc, Duration};
 
 /// Reputation score thresholds
 pub const REPUTATION_MIN: f64 = 0.0;
@@ -221,8 +221,11 @@ impl LightNodeProfile {
         // Too many warnings = extra penalty
         if self.warnings >= 5 {
             self.reputation = (self.reputation - 10.0).max(REPUTATION_MIN);
-            log::warn!("Node {} has {} warnings, extra reputation penalty applied",
-                self.node_id, self.warnings);
+            log::warn!(
+                "Node {} has {} warnings, extra reputation penalty applied",
+                self.node_id,
+                self.warnings
+            );
         }
     }
 
@@ -266,11 +269,11 @@ pub enum GoodAction {
 impl GoodAction {
     pub fn reputation_gain(&self) -> f64 {
         match self {
-            GoodAction::RelayedTransaction => 0.001,  // Small, many per day
-            GoodAction::PropagatedBlock => 0.01,      // Medium
+            GoodAction::RelayedTransaction => 0.001, // Small, many per day
+            GoodAction::PropagatedBlock => 0.01,     // Medium
             GoodAction::ServedDataRequest(_) => 0.05, // Good contribution
-            GoodAction::HelpedPeerConnect => 0.1,     // Helpful
-            GoodAction::DayOnline => 0.5,             // Consistency rewarded
+            GoodAction::HelpedPeerConnect => 0.1,    // Helpful
+            GoodAction::DayOnline => 0.5,            // Consistency rewarded
             GoodAction::StoredHistoricalData(bytes) => {
                 // 0.1 rep per GB stored
                 (*bytes as f64 / 1_073_741_824.0) * 0.1
@@ -295,10 +298,10 @@ pub enum BadAction {
 impl BadAction {
     pub fn reputation_loss(&self) -> f64 {
         match self {
-            BadAction::ServedInvalidData => 5.0,  // Serious
-            BadAction::WasUnreachable => 0.5,     // Minor
-            BadAction::WentOffline => 0.1,        // Happens
-            BadAction::SpammedNetwork => 10.0,    // Very serious
+            BadAction::ServedInvalidData => 5.0, // Serious
+            BadAction::WasUnreachable => 0.5,    // Minor
+            BadAction::WentOffline => 0.1,       // Happens
+            BadAction::SpammedNetwork => 10.0,   // Very serious
         }
     }
 }
@@ -357,7 +360,8 @@ impl LightNodeRewardsManager {
 
     /// Register a new light node
     pub fn register_node(&mut self, node_id: String) -> &LightNodeProfile {
-        self.profiles.entry(node_id.clone())
+        self.profiles
+            .entry(node_id.clone())
             .or_insert_with(|| LightNodeProfile::new(node_id))
     }
 
@@ -447,7 +451,9 @@ impl LightNodeRewardsManager {
 
     /// Get leaderboard (top nodes by reputation)
     pub fn get_leaderboard(&self, limit: usize) -> Vec<LeaderboardEntry> {
-        let mut entries: Vec<_> = self.profiles.values()
+        let mut entries: Vec<_> = self
+            .profiles
+            .values()
             .map(|p| LeaderboardEntry {
                 node_id: p.node_id.clone(),
                 reputation: p.reputation,
@@ -466,18 +472,17 @@ impl LightNodeRewardsManager {
     /// Get network statistics
     pub fn get_stats(&self) -> LightNodeNetworkStats {
         let online_count = self.profiles.values().filter(|p| p.is_online()).count();
-        let total_storage: u64 = self.profiles.values()
+        let total_storage: u64 = self
+            .profiles
+            .values()
             .map(|p| p.storage_contributed_bytes)
             .sum();
-        let total_txs_relayed: u64 = self.profiles.values()
-            .map(|p| p.stats.txs_relayed)
-            .sum();
+        let total_txs_relayed: u64 = self.profiles.values().map(|p| p.stats.txs_relayed).sum();
 
         let avg_reputation = if self.profiles.is_empty() {
             0.0
         } else {
-            self.profiles.values().map(|p| p.reputation).sum::<f64>()
-                / self.profiles.len() as f64
+            self.profiles.values().map(|p| p.reputation).sum::<f64>() / self.profiles.len() as f64
         };
 
         LightNodeNetworkStats {
@@ -532,7 +537,10 @@ mod tests {
     #[test]
     fn test_reputation_tiers() {
         assert_eq!(ReputationTier::from_score(5.0), ReputationTier::Newcomer);
-        assert_eq!(ReputationTier::from_score(25.0), ReputationTier::Established);
+        assert_eq!(
+            ReputationTier::from_score(25.0),
+            ReputationTier::Established
+        );
         assert_eq!(ReputationTier::from_score(60.0), ReputationTier::Trusted);
         assert_eq!(ReputationTier::from_score(90.0), ReputationTier::Veteran);
     }

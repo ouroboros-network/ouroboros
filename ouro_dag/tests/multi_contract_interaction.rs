@@ -43,8 +43,15 @@ mod multi_contract_tests {
                 .insert(spender.to_string(), amount);
         }
 
-        fn transfer_from(&mut self, spender: &str, from: &str, to: &str, amount: u64) -> Result<(), String> {
-            let allowance = *self.allowances
+        fn transfer_from(
+            &mut self,
+            spender: &str,
+            from: &str,
+            to: &str,
+            amount: u64,
+        ) -> Result<(), String> {
+            let allowance = *self
+                .allowances
                 .get(from)
                 .and_then(|map| map.get(spender))
                 .unwrap_or(&0);
@@ -100,7 +107,10 @@ mod multi_contract_tests {
             self.reserve_a += amount_a;
             self.reserve_b += amount_b;
             self.total_shares += shares;
-            *self.liquidity_shares.entry(provider.to_string()).or_insert(0) += shares;
+            *self
+                .liquidity_shares
+                .entry(provider.to_string())
+                .or_insert(0) += shares;
 
             shares
         }
@@ -354,8 +364,16 @@ mod multi_contract_tests {
                 id
             }
 
-            fn vote(&mut self, proposal_id: u64, voter: &str, voting_power: u64, vote_yes: bool) -> Result<(), String> {
-                let proposal = self.proposals.get_mut(&proposal_id)
+            fn vote(
+                &mut self,
+                proposal_id: u64,
+                voter: &str,
+                voting_power: u64,
+                vote_yes: bool,
+            ) -> Result<(), String> {
+                let proposal = self
+                    .proposals
+                    .get_mut(&proposal_id)
                     .ok_or_else(|| "Proposal not found".to_string())?;
 
                 if proposal.voters.contains_key(voter) {
@@ -374,7 +392,8 @@ mod multi_contract_tests {
             }
 
             fn get_result(&self, proposal_id: u64) -> Option<bool> {
-                self.proposals.get(&proposal_id)
+                self.proposals
+                    .get(&proposal_id)
                     .map(|p| p.yes_votes > p.no_votes)
             }
         }
@@ -387,7 +406,7 @@ mod multi_contract_tests {
 
         // Vote (weighted by token balance)
         dao.vote(proposal_id, "alice", 5_000, true).unwrap(); // 5000 tokens = 5000 votes yes
-        dao.vote(proposal_id, "bob", 2_000, false).unwrap();  // 2000 tokens = 2000 votes no
+        dao.vote(proposal_id, "bob", 2_000, false).unwrap(); // 2000 tokens = 2000 votes no
         dao.vote(proposal_id, "charlie", 1_000, true).unwrap(); // 1000 tokens = 1000 votes yes
 
         let passed = dao.get_result(proposal_id).unwrap();
@@ -395,7 +414,11 @@ mod multi_contract_tests {
         assert!(passed); // 6000 yes vs 2000 no
 
         println!("✅ DAO governance interaction:");
-        println!("   Proposal #{}: {}", proposal_id, if passed { "PASSED" } else { "REJECTED" });
+        println!(
+            "   Proposal #{}: {}",
+            proposal_id,
+            if passed { "PASSED" } else { "REJECTED" }
+        );
         println!("   Yes: 6000 votes, No: 2000 votes");
     }
 
@@ -426,7 +449,7 @@ mod multi_contract_tests {
 
         // Final state
         assert_eq!(base_token.balance_of("user"), 6_000); // 5000 + 1000 borrowed
-        assert_eq!(lp_token.balance_of("user"), 3_000);   // 5000 - 2000 collateral
+        assert_eq!(lp_token.balance_of("user"), 3_000); // 5000 - 2000 collateral
         assert_eq!(lp_token.balance_of("lending"), 2_000); // Holding collateral
 
         println!("✅ Complex DeFi scenario:");
@@ -528,7 +551,10 @@ mod multi_contract_tests {
 
         println!("📊 Multi-contract gas estimate: {} gas", total_gas);
 
-        assert!(total_gas < 200_000, "Multi-contract interaction should be under 200k gas");
+        assert!(
+            total_gas < 200_000,
+            "Multi-contract interaction should be under 200k gas"
+        );
 
         println!("✅ Multi-contract gas estimation complete");
     }

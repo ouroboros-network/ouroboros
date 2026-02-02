@@ -4,7 +4,7 @@
 //! This module provides helper functions to integrate fee distribution
 //! into transaction processing workflows.
 
-use super::fee_processor::{FeeProcessor, FeeProcessingResult};
+use super::fee_processor::{FeeProcessingResult, FeeProcessor};
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -55,13 +55,13 @@ use tokio::sync::RwLock;
 /// }
 /// ```
 pub async fn process_transaction_fee(
- fee_processor: Arc<RwLock<FeeProcessor>>,
- fee_amount: u64,
- validator_addresses: &[String],
- developer_address: Option<String>,
+    fee_processor: Arc<RwLock<FeeProcessor>>,
+    fee_amount: u64,
+    validator_addresses: &[String],
+    developer_address: Option<String>,
 ) -> Result<FeeProcessingResult> {
- let mut processor = fee_processor.write().await;
- processor.process_fee(fee_amount, validator_addresses, developer_address)
+    let mut processor = fee_processor.write().await;
+    processor.process_fee(fee_amount, validator_addresses, developer_address)
 }
 
 /// Process fees for a batch of transactions
@@ -111,79 +111,79 @@ pub async fn process_transaction_fee(
 /// }
 /// ```
 pub async fn process_batch_fees(
- fee_processor: Arc<RwLock<FeeProcessor>>,
- transactions: &[(u64, Vec<String>, Option<String>)], // (fee, validators, dev_addr)
+    fee_processor: Arc<RwLock<FeeProcessor>>,
+    transactions: &[(u64, Vec<String>, Option<String>)], // (fee, validators, dev_addr)
 ) -> Result<Vec<FeeProcessingResult>> {
- let mut processor = fee_processor.write().await;
- let mut results = Vec::new();
+    let mut processor = fee_processor.write().await;
+    let mut results = Vec::new();
 
- for (fee, validators, dev_addr) in transactions {
- let result = processor.process_fee(*fee, validators, dev_addr.clone())?;
- results.push(result);
- }
+    for (fee, validators, dev_addr) in transactions {
+        let result = processor.process_fee(*fee, validators, dev_addr.clone())?;
+        results.push(result);
+    }
 
- Ok(results)
+    Ok(results)
 }
 
 /// Get total burned amount since last reset
 pub async fn get_total_burned(fee_processor: Arc<RwLock<FeeProcessor>>) -> u64 {
- let processor = fee_processor.read().await;
- processor.get_total_burned()
+    let processor = fee_processor.read().await;
+    processor.get_total_burned()
 }
 
 #[cfg(test)]
 mod tests {
- use super::*;
- use crate::ouro_coin::FeeProcessor;
+    use super::*;
+    use crate::ouro_coin::FeeProcessor;
 
- #[tokio::test]
- async fn test_process_transaction_fee_integration() {
- let processor = Arc::new(RwLock::new(FeeProcessor::new("treasury".to_string())));
- let validators = vec!["val1".to_string(), "val2".to_string()];
+    #[tokio::test]
+    async fn test_process_transaction_fee_integration() {
+        let processor = Arc::new(RwLock::new(FeeProcessor::new("treasury".to_string())));
+        let validators = vec!["val1".to_string(), "val2".to_string()];
 
- let result = process_transaction_fee(
- processor.clone(),
- 1_000_000,
- &validators,
- Some("developer".to_string()),
- )
- .await
- .unwrap();
+        let result = process_transaction_fee(
+            processor.clone(),
+            1_000_000,
+            &validators,
+            Some("developer".to_string()),
+        )
+        .await
+        .unwrap();
 
- assert_eq!(result.total_fee, 1_000_000);
- assert_eq!(result.burned_amount, 100_000); // 10%
- assert_eq!(result.transfers.len(), 4); // 2 validators + treasury + developer
- }
+        assert_eq!(result.total_fee, 1_000_000);
+        assert_eq!(result.burned_amount, 100_000); // 10%
+        assert_eq!(result.transfers.len(), 4); // 2 validators + treasury + developer
+    }
 
- #[tokio::test]
- async fn test_process_batch_fees_integration() {
- let processor = Arc::new(RwLock::new(FeeProcessor::new("treasury".to_string())));
- let validators = vec!["val1".to_string()];
+    #[tokio::test]
+    async fn test_process_batch_fees_integration() {
+        let processor = Arc::new(RwLock::new(FeeProcessor::new("treasury".to_string())));
+        let validators = vec!["val1".to_string()];
 
- let transactions = vec![
- (1_000_000u64, validators.clone(), Some("dev1".to_string())),
- (500_000u64, validators.clone(), Some("dev2".to_string())),
- ];
+        let transactions = vec![
+            (1_000_000u64, validators.clone(), Some("dev1".to_string())),
+            (500_000u64, validators.clone(), Some("dev2".to_string())),
+        ];
 
- let results = process_batch_fees(processor.clone(), &transactions)
- .await
- .unwrap();
+        let results = process_batch_fees(processor.clone(), &transactions)
+            .await
+            .unwrap();
 
- assert_eq!(results.len(), 2);
- assert_eq!(results[0].total_fee, 1_000_000);
- assert_eq!(results[1].total_fee, 500_000);
- }
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].total_fee, 1_000_000);
+        assert_eq!(results[1].total_fee, 500_000);
+    }
 
- #[tokio::test]
- async fn test_get_total_burned() {
- let processor = Arc::new(RwLock::new(FeeProcessor::new("treasury".to_string())));
- let validators = vec!["val1".to_string()];
+    #[tokio::test]
+    async fn test_get_total_burned() {
+        let processor = Arc::new(RwLock::new(FeeProcessor::new("treasury".to_string())));
+        let validators = vec!["val1".to_string()];
 
- process_transaction_fee(processor.clone(), 1_000_000, &validators, None)
- .await
- .unwrap();
+        process_transaction_fee(processor.clone(), 1_000_000, &validators, None)
+            .await
+            .unwrap();
 
- let burned = get_total_burned(processor.clone()).await;
- assert_eq!(burned, 100_000); // 10% of 1M
- }
+        let burned = get_total_burned(processor.clone()).await;
+        assert_eq!(burned, 100_000); // 10% of 1M
+    }
 }

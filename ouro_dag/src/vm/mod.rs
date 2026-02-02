@@ -26,25 +26,24 @@
 //! let result = vm.call_contract(context, "transfer", &args)?;
 //! ```
 
-pub mod gas;
-pub mod types;
-pub mod storage;
-pub mod precompiles;
-pub mod host_functions;
-pub mod ovm;
 pub mod api;
 pub mod contract_macros;
+pub mod gas;
+pub mod host_functions;
+pub mod ovm;
+pub mod precompiles;
+pub mod storage;
+pub mod types;
 
 // Re-export main types
-pub use gas::{GasState, GasCosts};
-pub use types::{
- ContractAddress, ContractMetadata, ContractResult,
- ExecutionContext, ContractLog, StorageKey,
- AbiType, ContractAbi, AbiFunction,
-};
-pub use storage::ContractStorage;
-pub use precompiles::Precompiles;
+pub use gas::{GasCosts, GasState};
 pub use ovm::OuroborosVM;
+pub use precompiles::Precompiles;
+pub use storage::ContractStorage;
+pub use types::{
+    AbiFunction, AbiType, ContractAbi, ContractAddress, ContractLog, ContractMetadata,
+    ContractResult, ExecutionContext, StorageKey,
+};
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -68,7 +67,10 @@ struct ContractCallPayload {
 ///
 /// This function processes transactions that have contract call payloads
 /// and executes them in the OuroborosVM.
-pub fn execute_contracts(db: &crate::storage::RocksDb, transactions: &[crate::dag::transaction::Transaction]) -> Result<Vec<ContractResult>, String> {
+pub fn execute_contracts(
+    db: &crate::storage::RocksDb,
+    transactions: &[crate::dag::transaction::Transaction],
+) -> Result<Vec<ContractResult>, String> {
     let mut results = Vec::new();
 
     // Create contract storage from RocksDB (db is already Arc<DB>)

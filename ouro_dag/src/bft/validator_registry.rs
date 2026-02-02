@@ -1,9 +1,9 @@
 // src/bft/validator_registry.rs
+use crate::storage::RocksDb;
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
-use serde::{Serialize, Deserialize};
-use crate::storage::RocksDb;
 
 /// NodeId type alias expected in bft modules
 pub type NodeId = String;
@@ -58,9 +58,14 @@ impl ValidatorRegistry {
 
         // Load validator registry from RocksDB
         let key = "validator_registry";
-        if let Ok(Some(validators)) = crate::storage::get::<_, HashMap<NodeId, ValidatorInfo>>(db, key.as_bytes()) {
+        if let Ok(Some(validators)) =
+            crate::storage::get::<_, HashMap<NodeId, ValidatorInfo>>(db, key.as_bytes())
+        {
             *self.inner.write() = validators;
-            log::info!("Loaded {} validators from database", self.inner.read().len());
+            log::info!(
+                "Loaded {} validators from database",
+                self.inner.read().len()
+            );
         }
         Ok(())
     }
@@ -78,10 +83,13 @@ impl ValidatorRegistry {
 
     /// Register or update a validator with pubkey and stake.
     pub fn register(&self, id: &str, pubkey: Vec<u8>) {
-        self.inner.write().insert(id.to_string(), ValidatorInfo {
-            pubkey,
-            stake: 0, // Default stake, should be set via register_with_stake
-        });
+        self.inner.write().insert(
+            id.to_string(),
+            ValidatorInfo {
+                pubkey,
+                stake: 0, // Default stake, should be set via register_with_stake
+            },
+        );
         if let Err(e) = self.persist_to_db() {
             log::error!("Failed to persist validator registration: {}", e);
         }
@@ -89,10 +97,9 @@ impl ValidatorRegistry {
 
     /// Register validator with stake amount
     pub fn register_with_stake(&self, id: &str, pubkey: Vec<u8>, stake: u64) {
-        self.inner.write().insert(id.to_string(), ValidatorInfo {
-            pubkey,
-            stake,
-        });
+        self.inner
+            .write()
+            .insert(id.to_string(), ValidatorInfo { pubkey, stake });
         // Also persist individual stake for slashing manager
         if let Some(db) = &self.db {
             let stake_key = format!("validator_stake:{}", id);
@@ -144,7 +151,9 @@ impl ValidatorRegistry {
 
     /// Get all validators sorted by stake (descending)
     pub fn get_validators_by_stake(&self) -> Vec<(NodeId, u64)> {
-        let mut validators: Vec<_> = self.inner.read()
+        let mut validators: Vec<_> = self
+            .inner
+            .read()
             .iter()
             .map(|(id, info)| (id.clone(), info.stake))
             .collect();

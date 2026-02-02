@@ -1,19 +1,19 @@
 // src/zk_proofs/mod.rs
 // Zero-Knowledge Proofs for privacy and scalability
 
-pub mod circuit;
 pub mod batch;
+pub mod circuit;
 pub mod privacy;
 
-use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey, PreparedVerifyingKey};
 use ark_bn254::{Bn254, Fr};
-use ark_relations::r1cs::ConstraintSynthesizer;
-use ark_snark::SNARK;
 use ark_ff::PrimeField;
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
-use serde::{Serialize, Deserialize};
-use std::sync::Arc;
+use ark_groth16::{Groth16, PreparedVerifyingKey, Proof, ProvingKey, VerifyingKey};
+use ark_relations::r1cs::ConstraintSynthesizer;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_snark::SNARK;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// ZK Proof for a transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,13 +23,10 @@ pub struct TransactionProof {
 }
 
 /// Global proving/verifying keys
-static PROVING_KEY: Lazy<Arc<ProvingKey<Bn254>>> = Lazy::new(|| {
-    Arc::new(generate_proving_key())
-});
+static PROVING_KEY: Lazy<Arc<ProvingKey<Bn254>>> = Lazy::new(|| Arc::new(generate_proving_key()));
 
-static VERIFYING_KEY: Lazy<Arc<PreparedVerifyingKey<Bn254>>> = Lazy::new(|| {
-    Arc::new(prepare_verifying_key())
-});
+static VERIFYING_KEY: Lazy<Arc<PreparedVerifyingKey<Bn254>>> =
+    Lazy::new(|| Arc::new(prepare_verifying_key()));
 
 /// Generate proving key (one-time setup)
 fn generate_proving_key() -> ProvingKey<Bn254> {
@@ -70,15 +67,13 @@ pub fn generate_proof(
 
     // Serialize proof
     let mut proof_bytes = Vec::new();
-    proof.serialize_compressed(&mut proof_bytes)
+    proof
+        .serialize_compressed(&mut proof_bytes)
         .map_err(|e| format!("Proof serialization failed: {}", e))?;
 
     Ok(TransactionProof {
         proof: proof_bytes,
-        public_inputs: vec![
-            amount.to_string(),
-            recipient.to_string(),
-        ],
+        public_inputs: vec![amount.to_string(), recipient.to_string()],
     })
 }
 
@@ -89,14 +84,12 @@ pub fn verify_proof(proof: &TransactionProof) -> Result<bool, String> {
         .map_err(|e| format!("Proof deserialization failed: {}", e))?;
 
     // Parse public inputs
-    let amount = proof.public_inputs[0].parse::<u64>()
+    let amount = proof.public_inputs[0]
+        .parse::<u64>()
         .map_err(|e| format!("Invalid amount: {}", e))?;
     let recipient = &proof.public_inputs[1];
 
-    let public_inputs = vec![
-        Fr::from(amount),
-        hash_address(recipient),
-    ];
+    let public_inputs = vec![Fr::from(amount), hash_address(recipient)];
 
     // Verify proof
     Groth16::<Bn254>::verify_with_processed_vk(&VERIFYING_KEY, &public_inputs, &proof_obj)
@@ -105,7 +98,7 @@ pub fn verify_proof(proof: &TransactionProof) -> Result<bool, String> {
 
 /// Hash address for circuit
 fn hash_address(addr: &str) -> Fr {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(addr.as_bytes());
     let result = hasher.finalize();

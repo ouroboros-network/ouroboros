@@ -1,10 +1,10 @@
 // Blockchain indexer for fast queries (like The Graph)
 // Provides SQL-like queries on blockchain data
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Indexed transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,11 +69,13 @@ impl Indexer {
         // Update address index
         let mut addr_idx = self.address_txs.write().await;
 
-        addr_idx.entry(tx.from.clone())
+        addr_idx
+            .entry(tx.from.clone())
             .or_insert_with(Vec::new)
             .push(tx.hash.clone());
 
-        addr_idx.entry(tx.to.clone())
+        addr_idx
+            .entry(tx.to.clone())
             .or_insert_with(Vec::new)
             .push(tx.hash.clone());
     }
@@ -197,7 +199,8 @@ impl Indexer {
         let mut heights: Vec<_> = blocks.keys().cloned().collect();
         heights.sort_by(|a, b| b.cmp(a)); // Descending
 
-        heights.iter()
+        heights
+            .iter()
             .take(count)
             .filter_map(|h| blocks.get(h).cloned())
             .collect()

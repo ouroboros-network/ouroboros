@@ -1,7 +1,7 @@
 // Simple standalone metrics for Prometheus
+use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use once_cell::sync::Lazy;
 
 pub static METRICS: Lazy<SimpleMetrics> = Lazy::new(|| SimpleMetrics::new());
 

@@ -27,5 +27,8 @@ fn key_sign_verify() {
     // Verify with wrong pubkey should fail
     let wrong_pubkey: [u8; 32] = [99u8; 32];
     let ok_wrong_key = keys::verify_bytes(&wrong_pubkey, msg, &sig);
-    assert!(!ok_wrong_key, "signature should not verify with wrong pubkey");
+    assert!(
+        !ok_wrong_key,
+        "signature should not verify with wrong pubkey"
+    );
 }

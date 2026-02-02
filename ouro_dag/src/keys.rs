@@ -7,18 +7,18 @@ use std::fs;
 ///
 /// Returns `Some(String)` if found, otherwise `None`.
 pub fn load_secret(name: &str) -> Option<String> {
- // Docker secrets path
- let secret_path = format!("/run/secrets/{}", name);
- if let Ok(s) = fs::read_to_string(&secret_path) {
- let s = s.trim().to_string();
- if !s.is_empty() {
- return Some(s);
- }
- }
+    // Docker secrets path
+    let secret_path = format!("/run/secrets/{}", name);
+    if let Ok(s) = fs::read_to_string(&secret_path) {
+        let s = s.trim().to_string();
+        if !s.is_empty() {
+            return Some(s);
+        }
+    }
 
- // Fallback to environment variable
- match std::env::var(name) {
- Ok(v) if !v.is_empty() => Some(v),
- _ => None,
- }
+    // Fallback to environment variable
+    match std::env::var(name) {
+        Ok(v) if !v.is_empty() => Some(v),
+        _ => None,
+    }
 }

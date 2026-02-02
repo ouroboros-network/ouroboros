@@ -1,7 +1,7 @@
 // Cross-chain Oracle Relay
 // Publishes oracle data from Ouro to other blockchains (Ethereum, BSC, etc.)
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Supported target chains
@@ -112,7 +112,7 @@ impl OracleRelay {
     pub fn new(target_chains: Vec<TargetChain>) -> Self {
         Self {
             target_chains,
-            relay_interval: 60, // Relay every 60 seconds
+            relay_interval: 60,   // Relay every 60 seconds
             min_confidence: 0.67, // 67% confidence minimum
         }
     }
@@ -150,7 +150,9 @@ impl OracleRelay {
             "0x{}",
             hex::encode(sha2_hash(&format!(
                 "{}{}{}",
-                update.feed_id, update.timestamp, chain.chain_id()
+                update.feed_id,
+                update.timestamp,
+                chain.chain_id()
             )))
         );
 
@@ -164,7 +166,10 @@ impl OracleRelay {
     }
 
     /// Relay to all configured chains
-    pub async fn relay_to_all(&self, update: &OracleUpdate) -> HashMap<TargetChain, Result<String, String>> {
+    pub async fn relay_to_all(
+        &self,
+        update: &OracleUpdate,
+    ) -> HashMap<TargetChain, Result<String, String>> {
         let mut results = HashMap::new();
 
         for chain in &self.target_chains {
@@ -320,7 +325,7 @@ contract OuroOracle {
 }
 
 fn sha2_hash(data: &str) -> [u8; 32] {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(data.as_bytes());
     let result = hasher.finalize();
@@ -340,10 +345,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_oracle_relay() {
-        let relay = OracleRelay::new(vec![
-            TargetChain::Ethereum,
-            TargetChain::BinanceSmartChain,
-        ]);
+        let relay = OracleRelay::new(vec![TargetChain::Ethereum, TargetChain::BinanceSmartChain]);
 
         let update = OracleUpdate {
             feed_id: "BTC_USD".to_string(),

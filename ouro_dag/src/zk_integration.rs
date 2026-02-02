@@ -1,12 +1,12 @@
 // src/zk_integration.rs
 // Integration of ZK proofs with transaction system
 
-use crate::Transaction;
-use crate::zk_proofs::{generate_proof, verify_proof, verify_batch, TransactionProof};
 use crate::zk_proofs::privacy::ConfidentialTransaction;
+use crate::zk_proofs::{generate_proof, verify_batch, verify_proof, TransactionProof};
+use crate::Transaction;
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Transaction with ZK proof
 #[derive(Debug, Clone)]
@@ -43,10 +43,7 @@ impl ZkTransactionManager {
         // Create confidential transaction (optional)
         let blinding = rand::random::<[u8; 32]>();
         let confidential = Some(ConfidentialTransaction::new(
-            sender,
-            recipient,
-            amount,
-            &blinding,
+            sender, recipient, amount, &blinding,
         ));
 
         // Create base transaction

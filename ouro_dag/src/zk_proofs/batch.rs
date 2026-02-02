@@ -34,7 +34,9 @@ fn verify_single(proof: &TransactionProof) -> Result<bool, String> {
 pub fn aggregate_proofs(proofs: Vec<TransactionProof>) -> Result<TransactionProof, String> {
     // TODO: Implement proof aggregation using BLS signatures or recursive SNARKs
     // For now, return first proof as placeholder
-    proofs.into_iter().next()
+    proofs
+        .into_iter()
+        .next()
         .ok_or_else(|| "No proofs to aggregate".to_string())
 }
 

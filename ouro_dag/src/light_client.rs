@@ -1,8 +1,8 @@
 // Light client (SPV-style verification)
 // Allows mobile/browser nodes without full blockchain
 
-use serde::{Serialize, Deserialize};
-use sha2::{Sha256, Digest};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 /// Block header (minimal data for light clients)
@@ -125,7 +125,9 @@ impl LightClient {
         proof: MerkleProof,
     ) -> Result<bool, String> {
         // Get block header
-        let header = self.headers.get(&block_height)
+        let header = self
+            .headers
+            .get(&block_height)
             .ok_or("Block header not found")?;
 
         // Verify proof against merkle root
@@ -216,10 +218,7 @@ pub fn build_merkle_tree(tx_hashes: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// Generate merkle proof for transaction
-pub fn generate_merkle_proof(
-    tx_hashes: &[Vec<u8>],
-    tx_index: usize,
-) -> Option<MerkleProof> {
+pub fn generate_merkle_proof(tx_hashes: &[Vec<u8>], tx_index: usize) -> Option<MerkleProof> {
     if tx_index >= tx_hashes.len() {
         return None;
     }
@@ -229,11 +228,7 @@ pub fn generate_merkle_proof(
     let mut index = tx_index;
 
     while level.len() > 1 {
-        let sibling_index = if index % 2 == 0 {
-            index + 1
-        } else {
-            index - 1
-        };
+        let sibling_index = if index % 2 == 0 { index + 1 } else { index - 1 };
 
         if sibling_index < level.len() {
             siblings.push(level[sibling_index].clone());
@@ -283,12 +278,7 @@ mod tests {
 
     #[test]
     fn test_merkle_proof() {
-        let tx_hashes = vec![
-            vec![1, 1, 1],
-            vec![2, 2, 2],
-            vec![3, 3, 3],
-            vec![4, 4, 4],
-        ];
+        let tx_hashes = vec![vec![1, 1, 1], vec![2, 2, 2], vec![3, 3, 3], vec![4, 4, 4]];
 
         let merkle_root = build_merkle_tree(&tx_hashes);
 

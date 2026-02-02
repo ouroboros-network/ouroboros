@@ -1,12 +1,12 @@
 // src/network/dht.rs
 // DHT/Kademlia for zero-config peer discovery
 
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
-use std::sync::Arc;
-use serde::{Serialize, Deserialize};
-use sha2::{Sha256, Digest};
 
 /// Kademlia node ID (256-bit)
 pub type NodeId = [u8; 32];
@@ -88,7 +88,9 @@ pub struct Kademlia {
 impl Kademlia {
     /// Create new Kademlia DHT
     pub fn new(my_id: NodeId) -> Self {
-        let buckets = (0..256).map(|_| Arc::new(Mutex::new(KBucket::new()))).collect();
+        let buckets = (0..256)
+            .map(|_| Arc::new(Mutex::new(KBucket::new())))
+            .collect();
 
         Self {
             my_id,

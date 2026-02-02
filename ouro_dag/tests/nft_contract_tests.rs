@@ -13,11 +13,11 @@ mod nft_tests {
         symbol: String,
         owner: String,
         next_token_id: u64,
-        owners: HashMap<u64, String>,           // token_id -> owner
-        balances: HashMap<String, u64>,          // address -> count
-        token_approvals: HashMap<u64, String>,   // token_id -> approved
+        owners: HashMap<u64, String>,          // token_id -> owner
+        balances: HashMap<String, u64>,        // address -> count
+        token_approvals: HashMap<u64, String>, // token_id -> approved
         operator_approvals: HashMap<String, HashMap<String, bool>>, // owner -> operator -> approved
-        token_uris: HashMap<u64, String>,        // token_id -> URI
+        token_uris: HashMap<u64, String>,      // token_id -> URI
     }
 
     impl NFTState {
@@ -65,9 +65,16 @@ mod nft_tests {
             self.token_uris.get(&token_id).cloned()
         }
 
-        fn transfer(&mut self, from: &str, to: &str, token_id: u64, caller: &str) -> Result<(), String> {
+        fn transfer(
+            &mut self,
+            from: &str,
+            to: &str,
+            token_id: u64,
+            caller: &str,
+        ) -> Result<(), String> {
             // Check ownership
-            let current_owner = self.owner_of(token_id)
+            let current_owner = self
+                .owner_of(token_id)
                 .ok_or_else(|| "Token does not exist".to_string())?;
 
             if current_owner != from {
@@ -96,7 +103,8 @@ mod nft_tests {
         }
 
         fn approve(&mut self, spender: &str, token_id: u64, caller: &str) -> Result<(), String> {
-            let owner = self.owner_of(token_id)
+            let owner = self
+                .owner_of(token_id)
                 .ok_or_else(|| "Token does not exist".to_string())?;
 
             if caller != owner && !self.is_approved_for_all(&owner, caller) {
@@ -148,7 +156,8 @@ mod nft_tests {
         }
 
         fn burn(&mut self, token_id: u64, caller: &str) -> Result<(), String> {
-            let owner = self.owner_of(token_id)
+            let owner = self
+                .owner_of(token_id)
                 .ok_or_else(|| "Token does not exist".to_string())?;
 
             if !self.is_approved_or_owner(caller, token_id) {
@@ -183,7 +192,10 @@ mod nft_tests {
         assert_eq!(nft.owner, "owner_address");
         assert_eq!(nft.next_token_id, 1);
 
-        println!("✅ NFT collection initialized: {} ({})", nft.name, nft.symbol);
+        println!(
+            "✅ NFT collection initialized: {} ({})",
+            nft.name, nft.symbol
+        );
     }
 
     #[test]
@@ -195,7 +207,9 @@ mod nft_tests {
         );
 
         // Mint
-        let token_id = nft.mint("alice", "ipfs://Qm123...".to_string(), "owner").unwrap();
+        let token_id = nft
+            .mint("alice", "ipfs://Qm123...".to_string(), "owner")
+            .unwrap();
 
         assert_eq!(token_id, 1);
         assert_eq!(nft.owner_of(token_id), Some("alice".to_string()));
@@ -436,11 +450,13 @@ mod nft_tests {
             "owner".to_string(),
         );
 
-        let token_id = nft.mint(
-            "alice",
-            "ipfs://QmXyZ123.../metadata.json".to_string(),
-            "owner",
-        ).unwrap();
+        let token_id = nft
+            .mint(
+                "alice",
+                "ipfs://QmXyZ123.../metadata.json".to_string(),
+                "owner",
+            )
+            .unwrap();
 
         let uri = nft.token_uri(token_id).unwrap();
         assert!(uri.starts_with("ipfs://"));
@@ -460,11 +476,11 @@ mod nft_tests {
         }
 
         let gas = GasEstimate {
-            mint: 50_000,               // Multiple storage writes
-            transfer: 40_000,           // Ownership + balance updates
-            approve: 25_000,            // Approval storage
+            mint: 50_000,                 // Multiple storage writes
+            transfer: 40_000,             // Ownership + balance updates
+            approve: 25_000,              // Approval storage
             set_approval_for_all: 30_000, // Operator approval
-            burn: 35_000,               // Remove ownership + approvals
+            burn: 35_000,                 // Remove ownership + approvals
         };
 
         // Verify all operations are under 60k gas
@@ -504,7 +520,7 @@ mod nft_tests {
 
         assert_eq!(nft.next_token_id, 11); // Next would be 11
         assert_eq!(nft.balance_of("alice"), 4); // 0, 3, 6, 9
-        assert_eq!(nft.balance_of("bob"), 3);   // 1, 4, 7
+        assert_eq!(nft.balance_of("bob"), 3); // 1, 4, 7
         assert_eq!(nft.balance_of("charlie"), 3); // 2, 5, 8
 
         println!("✅ Collection stats:");

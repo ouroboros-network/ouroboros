@@ -1,33 +1,35 @@
 // src/bft/crypto_bridge.rs
 // Small ed25519 helper for consensus. Replace with your keymgmt.rs/crypto.rs integration if needed.
-use ed25519_dalek::{Signature, Signer, Verifier, SigningKey, VerifyingKey, PUBLIC_KEY_LENGTH};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey, PUBLIC_KEY_LENGTH};
 use rand::rngs::OsRng;
-use std::path::Path;
 use std::fs;
 use std::io::Write;
+use std::path::Path;
 
 pub type SigBytes = Vec<u8>;
 
 /// Generate a keypair and write to disk (PEM-like raw).
 pub fn generate_keypair_write(path: &Path) -> anyhow::Result<SigningKey> {
- let mut csprng = OsRng{};
- let kp = SigningKey::generate(&mut csprng);
- let mut f = fs::File::create(path)?;
- f.write_all(&kp.to_keypair_bytes())?;
- Ok(kp)
+    let mut csprng = OsRng {};
+    let kp = SigningKey::generate(&mut csprng);
+    let mut f = fs::File::create(path)?;
+    f.write_all(&kp.to_keypair_bytes())?;
+    Ok(kp)
 }
 
 /// Load raw keypair bytes (32+32).
 pub fn load_keypair(path: &Path) -> anyhow::Result<SigningKey> {
- let raw = fs::read(path)?;
- let raw_array: [u8; 64] = raw.try_into().map_err(|_| anyhow::anyhow!("invalid keypair length"))?;
- let kp = SigningKey::from_keypair_bytes(&raw_array)?;
- Ok(kp)
+    let raw = fs::read(path)?;
+    let raw_array: [u8; 64] = raw
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("invalid keypair length"))?;
+    let kp = SigningKey::from_keypair_bytes(&raw_array)?;
+    Ok(kp)
 }
 
 /// Sign message bytes and return signature bytes.
 pub fn sign_message(kp: &SigningKey, msg: &[u8]) -> SigBytes {
- kp.sign(msg).to_vec()
+    kp.sign(msg).to_vec()
 }
 
 /// Verify signature given public key bytes (32 bytes) and message.

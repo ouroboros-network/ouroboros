@@ -1,11 +1,11 @@
 // Cross-chain bridge for asset transfers
 // Lock-and-mint bridge between chains
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
-use sha2::{Sha256, Digest};
+use tokio::sync::RwLock;
 
 /// Bridge transfer request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,8 +125,7 @@ impl BridgeManager {
     pub async fn lock_assets(&self, transfer_id: &str) -> Result<(), String> {
         let mut transfers = self.transfers.write().await;
 
-        let transfer = transfers.get_mut(transfer_id)
-            .ok_or("Transfer not found")?;
+        let transfer = transfers.get_mut(transfer_id).ok_or("Transfer not found")?;
 
         if transfer.status != BridgeStatus::Pending {
             return Err(format!("Invalid status: {:?}", transfer.status));
@@ -145,7 +144,11 @@ impl BridgeManager {
 
     /// Mint wrapped assets on destination chain (Phase 2)
     /// NOW USES ORACLE SUBCHAIN FOR VERIFICATION (secure!)
-    pub async fn mint_wrapped(&self, transfer_id: &str, oracle_verification: OracleVerification) -> Result<(), String> {
+    pub async fn mint_wrapped(
+        &self,
+        transfer_id: &str,
+        oracle_verification: OracleVerification,
+    ) -> Result<(), String> {
         // Verify oracle proof from oracle subchain
         if !oracle_verification.verified {
             return Err("Oracle verification failed".to_string());
@@ -153,7 +156,10 @@ impl BridgeManager {
 
         // Verify oracle confidence (>66% stake agreement)
         if oracle_verification.confidence < 0.66 {
-            return Err(format!("Low oracle confidence: {}", oracle_verification.confidence));
+            return Err(format!(
+                "Low oracle confidence: {}",
+                oracle_verification.confidence
+            ));
         }
 
         // Verify oracle validators count
@@ -163,8 +169,7 @@ impl BridgeManager {
 
         let mut transfers = self.transfers.write().await;
 
-        let transfer = transfers.get_mut(transfer_id)
-            .ok_or("Transfer not found")?;
+        let transfer = transfers.get_mut(transfer_id).ok_or("Transfer not found")?;
 
         if transfer.status != BridgeStatus::Locked {
             return Err(format!("Invalid status: {:?}", transfer.status));
@@ -190,8 +195,7 @@ impl BridgeManager {
     pub async fn complete_transfer(&self, transfer_id: &str) -> Result<(), String> {
         let mut transfers = self.transfers.write().await;
 
-        let transfer = transfers.get_mut(transfer_id)
-            .ok_or("Transfer not found")?;
+        let transfer = transfers.get_mut(transfer_id).ok_or("Transfer not found")?;
 
         if transfer.status != BridgeStatus::Minted {
             return Err(format!("Invalid status: {:?}", transfer.status));
@@ -206,8 +210,7 @@ impl BridgeManager {
     pub async fn unlock_assets(&self, transfer_id: &str) -> Result<(), String> {
         let mut transfers = self.transfers.write().await;
 
-        let transfer = transfers.get_mut(transfer_id)
-            .ok_or("Transfer not found")?;
+        let transfer = transfers.get_mut(transfer_id).ok_or("Transfer not found")?;
 
         // Burn wrapped assets
         let mut minted = self.minted_assets.write().await;
@@ -287,11 +290,8 @@ pub async fn query_oracle_verification(
     // Oracle validators submit their verifications to oracle subchain
     // Main chain reads consensus from oracle subchain
 
-    let bridge_verification = crate::oracle_subchain::verify_bridge_via_oracle(
-        source_chain,
-        block_hash,
-        tx_hash,
-    ).await?;
+    let bridge_verification =
+        crate::oracle_subchain::verify_bridge_via_oracle(source_chain, block_hash, tx_hash).await?;
 
     // Convert oracle subchain verification to bridge verification
     Ok(OracleVerification {
@@ -315,25 +315,32 @@ mod tests {
         let bridge = BridgeManager::new(2);
 
         // Register validators
-        bridge.register_validator(BridgeValidator {
-            address: "val1".to_string(),
-            stake: 1000,
-        }).await;
+        bridge
+            .register_validator(BridgeValidator {
+                address: "val1".to_string(),
+                stake: 1000,
+            })
+            .await;
 
-        bridge.register_validator(BridgeValidator {
-            address: "val2".to_string(),
-            stake: 1000,
-        }).await;
+        bridge
+            .register_validator(BridgeValidator {
+                address: "val2".to_string(),
+                stake: 1000,
+            })
+            .await;
 
         // Initiate transfer
-        let transfer_id = bridge.initiate_transfer(
-            "Ethereum".to_string(),
-            "Ouroboros".to_string(),
-            "alice_eth".to_string(),
-            "alice_ouro".to_string(),
-            "ETH".to_string(),
-            100,
-        ).await.unwrap();
+        let transfer_id = bridge
+            .initiate_transfer(
+                "Ethereum".to_string(),
+                "Ouroboros".to_string(),
+                "alice_eth".to_string(),
+                "alice_ouro".to_string(),
+                "ETH".to_string(),
+                100,
+            )
+            .await
+            .unwrap();
 
         // Lock on source
         bridge.lock_assets(&transfer_id).await.unwrap();
@@ -353,7 +360,10 @@ mod tests {
             oracle_block: 100,
             timestamp: current_unix_time(),
         };
-        bridge.mint_wrapped(&transfer_id, oracle_proof).await.unwrap();
+        bridge
+            .mint_wrapped(&transfer_id, oracle_proof)
+            .await
+            .unwrap();
 
         // Check minted amount
         let minted = bridge.get_minted_amount("Ouroboros", "ETH").await;
@@ -372,14 +382,17 @@ mod tests {
         let bridge = BridgeManager::new(2);
 
         // Setup initial state (locked ETH)
-        let transfer_id = bridge.initiate_transfer(
-            "Ethereum".to_string(),
-            "Ouroboros".to_string(),
-            "alice_eth".to_string(),
-            "alice_ouro".to_string(),
-            "ETH".to_string(),
-            50,
-        ).await.unwrap();
+        let transfer_id = bridge
+            .initiate_transfer(
+                "Ethereum".to_string(),
+                "Ouroboros".to_string(),
+                "alice_eth".to_string(),
+                "alice_ouro".to_string(),
+                "ETH".to_string(),
+                50,
+            )
+            .await
+            .unwrap();
 
         bridge.lock_assets(&transfer_id).await.unwrap();
 
@@ -393,17 +406,23 @@ mod tests {
             oracle_block: 50,
             timestamp: current_unix_time(),
         };
-        bridge.mint_wrapped(&transfer_id, oracle_proof).await.unwrap();
+        bridge
+            .mint_wrapped(&transfer_id, oracle_proof)
+            .await
+            .unwrap();
 
         // Now reverse: burn wrapped ETH on Ouroboros, unlock on Ethereum
-        let reverse_id = bridge.initiate_transfer(
-            "Ouroboros".to_string(),
-            "Ethereum".to_string(),
-            "alice_ouro".to_string(),
-            "alice_eth".to_string(),
-            "ETH".to_string(),
-            50,
-        ).await.unwrap();
+        let reverse_id = bridge
+            .initiate_transfer(
+                "Ouroboros".to_string(),
+                "Ethereum".to_string(),
+                "alice_ouro".to_string(),
+                "alice_eth".to_string(),
+                "ETH".to_string(),
+                50,
+            )
+            .await
+            .unwrap();
 
         bridge.unlock_assets(&reverse_id).await.unwrap();
 

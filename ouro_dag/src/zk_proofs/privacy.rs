@@ -2,8 +2,8 @@
 // Privacy primitives: confidential transactions, range proofs
 
 use ark_bn254::Fr;
-use sha2::{Sha256, Digest};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Confidential transaction (hide amount and participants)
 #[derive(Debug, Clone, Serialize, Deserialize)]

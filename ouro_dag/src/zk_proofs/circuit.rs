@@ -2,8 +2,8 @@
 // R1CS circuits for transaction privacy
 
 use ark_bn254::Fr;
-use ark_r1cs_std::prelude::*;
 use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 /// Transaction privacy circuit

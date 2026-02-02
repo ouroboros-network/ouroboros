@@ -1,13 +1,13 @@
 // src/storage.rs
 // RocksDB-backed persistent storage
 
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json;
-use rocksdb::{DB, Options, WriteBatch, IteratorMode};
-use std::sync::Arc;
-use std::time::Duration;
-use std::thread::sleep;
 use once_cell::sync::OnceCell;
+use rocksdb::{IteratorMode, Options, WriteBatch, DB};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json;
+use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 /// Type alias for RocksDB (Arc for cheap cloning)
 pub type RocksDb = Arc<DB>;
@@ -37,9 +37,15 @@ pub fn open_db(path: &str) -> RocksDb {
             Err(e) => {
                 attempt += 1;
                 if attempt >= max_attempts {
-                    panic!("Failed to open RocksDB at '{}': {} (attempts={})", path, e, attempt);
+                    panic!(
+                        "Failed to open RocksDB at '{}': {} (attempts={})",
+                        path, e, attempt
+                    );
                 }
-                eprintln!("open_db attempt {}/{} failed: {} — retrying in {}ms", attempt, max_attempts, e, wait);
+                eprintln!(
+                    "open_db attempt {}/{} failed: {} — retrying in {}ms",
+                    attempt, max_attempts, e, wait
+                );
                 sleep(Duration::from_millis(wait));
                 wait = std::cmp::min(wait * 2, 2000);
             }
@@ -122,7 +128,10 @@ pub fn iter_prefix<T: DeserializeOwned>(db: &RocksDb, prefix: &[u8]) -> Result<V
 }
 
 /// Iterate prefix returning (key_string, value) pairs
-pub fn iter_prefix_kv<T: DeserializeOwned>(db: &RocksDb, prefix: &str) -> Result<Vec<(String, T)>, String> {
+pub fn iter_prefix_kv<T: DeserializeOwned>(
+    db: &RocksDb,
+    prefix: &str,
+) -> Result<Vec<(String, T)>, String> {
     let mut out = Vec::new();
     let prefix_bytes = prefix.as_bytes();
     let iter = db.prefix_iterator(prefix_bytes);
@@ -182,7 +191,7 @@ pub fn iter_prefix_limited<T: DeserializeOwned>(
     db: &RocksDb,
     prefix: &str,
     limit: usize,
-    offset: usize
+    offset: usize,
 ) -> Result<Vec<T>, String> {
     let prefix_bytes = prefix.as_bytes();
     let iter = db.prefix_iterator(prefix_bytes);
@@ -221,7 +230,9 @@ pub fn put_counter(db: &RocksDb, key: &str, value: u64) -> Result<(), String> {
 pub fn get_counter(db: &RocksDb, key: &str) -> Result<u64, String> {
     match db.get(key.as_bytes()).map_err(|e| e.to_string())? {
         Some(bytes) => {
-            let arr: [u8; 8] = bytes.as_slice().try_into()
+            let arr: [u8; 8] = bytes
+                .as_slice()
+                .try_into()
                 .map_err(|_| "Invalid counter bytes".to_string())?;
             Ok(u64::from_le_bytes(arr))
         }

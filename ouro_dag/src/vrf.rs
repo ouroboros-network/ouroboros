@@ -1,14 +1,10 @@
 // VRF (Verifiable Random Function) for fair leader selection
 // Like Algorand/Cardano - provably random but verifiable
 
-use curve25519_dalek::{
-    edwards::EdwardsPoint,
-    scalar::Scalar,
-    constants::ED25519_BASEPOINT_TABLE,
-};
-use sha2::{Sha512, Digest};
-use serde::{Serialize, Deserialize};
+use curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE, edwards::EdwardsPoint, scalar::Scalar};
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha512};
 
 /// VRF output and proof
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,7 +26,9 @@ pub struct VrfProof {
 pub fn vrf_prove(secret_key: &[u8], input: &[u8]) -> Result<VrfOutput, String> {
     // Parse secret key
     let x = Scalar::from_bytes_mod_order(
-        secret_key.try_into().map_err(|_| "Invalid secret key".to_string())?
+        secret_key
+            .try_into()
+            .map_err(|_| "Invalid secret key".to_string())?,
     );
 
     // Public key
@@ -73,31 +71,38 @@ pub fn vrf_prove(secret_key: &[u8], input: &[u8]) -> Result<VrfOutput, String> {
 }
 
 /// Verify VRF proof
-pub fn vrf_verify(
-    public_key: &[u8],
-    input: &[u8],
-    output: &VrfOutput,
-) -> Result<bool, String> {
+pub fn vrf_verify(public_key: &[u8], input: &[u8], output: &VrfOutput) -> Result<bool, String> {
     // Parse public key
-    let pk_bytes: [u8; 32] = public_key.try_into()
+    let pk_bytes: [u8; 32] = public_key
+        .try_into()
         .map_err(|_| "Invalid public key".to_string())?;
-    let pk = decompress_point(&pk_bytes)
-        .ok_or("Invalid public key point".to_string())?;
+    let pk = decompress_point(&pk_bytes).ok_or("Invalid public key point".to_string())?;
 
     // Parse proof
-    let gamma_bytes: [u8; 32] = output.proof.gamma.clone().try_into()
+    let gamma_bytes: [u8; 32] = output
+        .proof
+        .gamma
+        .clone()
+        .try_into()
         .map_err(|_| "Invalid gamma".to_string())?;
-    let gamma = decompress_point(&gamma_bytes)
-        .ok_or("Invalid gamma point".to_string())?;
+    let gamma = decompress_point(&gamma_bytes).ok_or("Invalid gamma point".to_string())?;
 
     let c = Scalar::from_bytes_mod_order(
-        output.proof.c.clone().try_into()
-            .map_err(|_| "Invalid c".to_string())?
+        output
+            .proof
+            .c
+            .clone()
+            .try_into()
+            .map_err(|_| "Invalid c".to_string())?,
     );
 
     let s = Scalar::from_bytes_mod_order(
-        output.proof.s.clone().try_into()
-            .map_err(|_| "Invalid s".to_string())?
+        output
+            .proof
+            .s
+            .clone()
+            .try_into()
+            .map_err(|_| "Invalid s".to_string())?,
     );
 
     // Hash input to curve
@@ -144,9 +149,7 @@ fn hash_to_curve(input: &[u8]) -> EdwardsPoint {
     hasher.update(input);
     let hash = hasher.finalize();
 
-    let scalar = Scalar::from_bytes_mod_order(
-        hash[0..32].try_into().unwrap()
-    );
+    let scalar = Scalar::from_bytes_mod_order(hash[0..32].try_into().unwrap());
 
     ED25519_BASEPOINT_TABLE * &scalar
 }
@@ -175,9 +178,7 @@ fn hash_challenge(
     hasher.update(v.compress().as_bytes());
     let hash = hasher.finalize();
 
-    Scalar::from_bytes_mod_order(
-        hash[0..32].try_into().unwrap()
-    )
+    Scalar::from_bytes_mod_order(hash[0..32].try_into().unwrap())
 }
 
 /// Convert bytes to float [0, 1)

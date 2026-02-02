@@ -1,7 +1,7 @@
 // Oracle Subchain - Dedicated microchain for oracle data
 // Uses existing subchain infrastructure for decentralized oracles
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Oracle data submission (stored in oracle subchain)
@@ -51,7 +51,7 @@ impl Default for OracleSubchainConfig {
         Self {
             subchain_id: "oracle_subchain".to_string(),
             min_stake: 500_000_000_000, // 5,000 OURO - same as subchain deposit
-            aggregation_window: 60, // 1 minute
+            aggregation_window: 60,     // 1 minute
             slash_amount: 100_000_000_000, // 1,000 OURO slash (20% of stake)
         }
     }
@@ -102,7 +102,8 @@ pub fn process_oracle_transaction(
             }
 
             // Add to pending submissions
-            let feed = current_feeds.entry(data.feed_id.clone())
+            let feed = current_feeds
+                .entry(data.feed_id.clone())
                 .or_insert_with(|| OracleFeed {
                     feed_id: data.feed_id.clone(),
                     current_value: vec![],
@@ -116,10 +117,13 @@ pub fn process_oracle_transaction(
             Ok(())
         }
 
-        OracleTransaction::FinalizeFeed { feed_id, consensus_value, validators } => {
+        OracleTransaction::FinalizeFeed {
+            feed_id,
+            consensus_value,
+            validators,
+        } => {
             // Update feed with consensus
-            let feed = current_feeds.get_mut(&feed_id)
-                .ok_or("Feed not found")?;
+            let feed = current_feeds.get_mut(&feed_id).ok_or("Feed not found")?;
 
             feed.current_value = consensus_value;
             feed.last_update = current_unix_time();
@@ -129,7 +133,11 @@ pub fn process_oracle_transaction(
             Ok(())
         }
 
-        OracleTransaction::SlashValidator { validator, reason, amount } => {
+        OracleTransaction::SlashValidator {
+            validator,
+            reason,
+            amount,
+        } => {
             // Slash recorded in subchain state
             // TODO: Integrate with validator registry
             Ok(())
@@ -138,9 +146,7 @@ pub fn process_oracle_transaction(
 }
 
 /// Aggregate submissions to consensus value
-pub fn aggregate_oracle_submissions(
-    submissions: &[OracleData],
-) -> (Vec<u8>, Vec<String>) {
+pub fn aggregate_oracle_submissions(submissions: &[OracleData]) -> (Vec<u8>, Vec<String>) {
     if submissions.is_empty() {
         return (vec![], vec![]);
     }
@@ -151,18 +157,21 @@ pub fn aggregate_oracle_submissions(
 
     for sub in submissions {
         *value_stakes.entry(sub.value.clone()).or_insert(0) += sub.stake;
-        value_validators.entry(sub.value.clone())
+        value_validators
+            .entry(sub.value.clone())
             .or_insert_with(Vec::new)
             .push(sub.validator.clone());
     }
 
     // Get consensus (highest stake)
-    let consensus = value_stakes.iter()
+    let consensus = value_stakes
+        .iter()
         .max_by_key(|(_, stake)| *stake)
         .map(|(value, _)| value.clone())
         .unwrap_or_default();
 
-    let validators = value_validators.get(&consensus)
+    let validators = value_validators
+        .get(&consensus)
         .cloned()
         .unwrap_or_default();
 
@@ -214,7 +223,11 @@ pub async fn verify_bridge_via_oracle(
     let oracle_manager = crate::oracle::get_oracle_manager()
         .map_err(|e| format!("Failed to get oracle manager: {}", e))?;
 
-    let oracle_feed = oracle_manager.lock().await.get_aggregated_feed(&feed_id).await
+    let oracle_feed = oracle_manager
+        .lock()
+        .await
+        .get_aggregated_feed(&feed_id)
+        .await
         .map_err(|e| format!("Failed to get oracle feed: {}", e))?;
 
     // Parse verification result from oracle data

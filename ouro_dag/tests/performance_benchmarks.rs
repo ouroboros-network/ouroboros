@@ -4,8 +4,8 @@
 
 #[cfg(test)]
 mod performance_tests {
-    use std::time::{Duration, Instant};
     use std::collections::HashMap;
+    use std::time::{Duration, Instant};
 
     struct BenchmarkResult {
         operation: String,
@@ -58,7 +58,10 @@ mod performance_tests {
         });
 
         result.report();
-        assert!(result.ops_per_sec > 100_000.0, "HashMap inserts should be very fast");
+        assert!(
+            result.ops_per_sec > 100_000.0,
+            "HashMap inserts should be very fast"
+        );
     }
 
     #[test]
@@ -75,7 +78,10 @@ mod performance_tests {
 
         result.report();
         // Threshold depends on hardware - 100k+ is reasonable for HashMap operations
-        assert!(result.ops_per_sec > 100_000.0, "Balance updates should be fast");
+        assert!(
+            result.ops_per_sec > 100_000.0,
+            "Balance updates should be fast"
+        );
 
         println!("✅ Balance transfer benchmark complete");
     }
@@ -114,10 +120,7 @@ mod performance_tests {
         }
 
         let mut token = TokenState {
-            balances: HashMap::from([
-                ("alice".to_string(), 1_000_000),
-                ("bob".to_string(), 0),
-            ]),
+            balances: HashMap::from([("alice".to_string(), 1_000_000), ("bob".to_string(), 0)]),
         };
 
         let result = benchmark("Token Transfer", 50_000, || {
@@ -125,7 +128,10 @@ mod performance_tests {
         });
 
         result.report();
-        assert!(result.ops_per_sec > 100_000.0, "Token transfers should be fast");
+        assert!(
+            result.ops_per_sec > 100_000.0,
+            "Token transfers should be fast"
+        );
 
         println!("✅ Token transfer benchmark: {:.0} TPS", result.ops_per_sec);
     }
@@ -174,7 +180,10 @@ mod performance_tests {
         });
 
         result.report();
-        println!("✅ NFT minting benchmark: {:.0} mints/sec", result.ops_per_sec);
+        println!(
+            "✅ NFT minting benchmark: {:.0} mints/sec",
+            result.ops_per_sec
+        );
     }
 
     #[test]
@@ -189,7 +198,10 @@ mod performance_tests {
         });
 
         result.report();
-        assert!(result.ops_per_sec > 1_000_000.0, "Math operations should be very fast");
+        assert!(
+            result.ops_per_sec > 1_000_000.0,
+            "Math operations should be very fast"
+        );
 
         println!("✅ DEX swap calculation benchmark complete");
     }
@@ -219,7 +231,10 @@ mod performance_tests {
         });
 
         result.report();
-        println!("✅ Batch processing benchmark: {:.0} batches/sec", result.ops_per_sec);
+        println!(
+            "✅ Batch processing benchmark: {:.0} batches/sec",
+            result.ops_per_sec
+        );
     }
 
     #[test]
@@ -259,7 +274,10 @@ mod performance_tests {
             let tps = ops_per_sec;
             let time_per_op = 1_000_000.0 / tps; // microseconds
 
-            println!("   {:<25} {:>15.0} ops/sec ({:.2} μs/op)", name, tps, time_per_op);
+            println!(
+                "   {:<25} {:>15.0} ops/sec ({:.2} μs/op)",
+                name, tps, time_per_op
+            );
         }
 
         println!("\n✅ Performance comparison complete");

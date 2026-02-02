@@ -17,20 +17,20 @@ const FLUSH_INTERVAL_MS: u64 = 100; // Or flush every 100ms
 
 #[derive(Debug, Clone)]
 pub struct PendingTransaction {
- pub tx_id: Uuid,
- pub tx_hash: String,
- pub sender: String,
- pub recipient: String,
- pub payload: Value,
- pub signature: Option<String>,
- pub amount: u64,
- pub fee: u64,
- pub public_key: String,
+    pub tx_id: Uuid,
+    pub tx_hash: String,
+    pub sender: String,
+    pub recipient: String,
+    pub payload: Value,
+    pub signature: Option<String>,
+    pub amount: u64,
+    pub fee: u64,
+    pub public_key: String,
 }
 
 pub struct BatchWriter {
- tx_sender: mpsc::Sender<PendingTransaction>,
- _processor_handle: tokio::task::JoinHandle<()>,
+    tx_sender: mpsc::Sender<PendingTransaction>,
+    _processor_handle: tokio::task::JoinHandle<()>,
 }
 
 impl BatchWriter {
@@ -51,22 +51,22 @@ impl BatchWriter {
         });
         println!("CONFIG: DEBUG: tokio::spawn returned (task spawned)");
 
- Self {
- tx_sender,
- _processor_handle: processor_handle,
- }
- }
+        Self {
+            tx_sender,
+            _processor_handle: processor_handle,
+        }
+    }
 
- /// Submit a transaction for batch processing (non-blocking)
- pub async fn submit(&self, tx: PendingTransaction) -> Result<()> {
- println!(" BatchWriter.submit() called for tx: {}", tx.tx_hash);
- self.tx_sender
- .send(tx)
- .await
- .map_err(|e| anyhow::anyhow!("Failed to queue transaction: {}", e))?;
- println!(" Transaction queued successfully");
- Ok(())
- }
+    /// Submit a transaction for batch processing (non-blocking)
+    pub async fn submit(&self, tx: PendingTransaction) -> Result<()> {
+        println!(" BatchWriter.submit() called for tx: {}", tx.tx_hash);
+        self.tx_sender
+            .send(tx)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to queue transaction: {}", e))?;
+        println!(" Transaction queued successfully");
+        Ok(())
+    }
 }
 
 /// Background task that batches and flushes transactions
@@ -82,8 +82,14 @@ async fn batch_processor(
     let mut flush_timer = interval(Duration::from_millis(FLUSH_INTERVAL_MS));
     println!("CONFIG: DEBUG: Flush timer created");
 
-    info!("STARTING: Batch transaction processor started (batch_size={}, flush_interval={}ms)", BATCH_SIZE, FLUSH_INTERVAL_MS);
-    println!("STARTING: Batch transaction processor started (batch_size={}, flush_interval={}ms)", BATCH_SIZE, FLUSH_INTERVAL_MS);
+    info!(
+        "STARTING: Batch transaction processor started (batch_size={}, flush_interval={}ms)",
+        BATCH_SIZE, FLUSH_INTERVAL_MS
+    );
+    println!(
+        "STARTING: Batch transaction processor started (batch_size={}, flush_interval={}ms)",
+        BATCH_SIZE, FLUSH_INTERVAL_MS
+    );
 
     loop {
         tokio::select! {
@@ -108,20 +114,20 @@ async fn batch_processor(
 }
 
 /// Flush a batch of transactions to RocksDB
-async fn flush_batch(
-    batch: &mut Vec<PendingTransaction>,
-    rocks_db: &crate::storage::RocksDb,
-) {
- if batch.is_empty() {
- return;
- }
+async fn flush_batch(batch: &mut Vec<PendingTransaction>, rocks_db: &crate::storage::RocksDb) {
+    if batch.is_empty() {
+        return;
+    }
 
     let batch_size = batch.len();
     let start = std::time::Instant::now();
 
     // Bulk insert into RocksDB mempool
     if let Err(e) = flush_to_rocks(batch, rocks_db) {
-        warn!("WARNING Failed to flush {} transactions to RocksDB: {}", batch_size, e);
+        warn!(
+            "WARNING Failed to flush {} transactions to RocksDB: {}",
+            batch_size, e
+        );
         // Don't clear batch - will retry on next flush
         return;
     }
@@ -138,33 +144,36 @@ async fn flush_batch(
 }
 
 /// Bulk insert transactions into PostgreSQL using UNNEST (DEPRECATED - use flush_to_rocks instead)
-async fn flush_to_postgres(_batch: &[PendingTransaction], _db_pool: &crate::storage::RocksDb) -> Result<()> {
- // TODO_ROCKSDB: This function is deprecated, use flush_to_rocks instead
- Ok(())
+async fn flush_to_postgres(
+    _batch: &[PendingTransaction],
+    _db_pool: &crate::storage::RocksDb,
+) -> Result<()> {
+    // TODO_ROCKSDB: This function is deprecated, use flush_to_rocks instead
+    Ok(())
 }
 
 /// Bulk insert transactions into RocksDB mempool
 fn flush_to_rocks(batch: &[PendingTransaction], db: &crate::storage::RocksDb) -> Result<()> {
- for tx in batch {
- let dag_transaction = Transaction {
- id: tx.tx_id,
- sender: tx.sender.clone(),
- recipient: tx.recipient.clone(),
- amount: tx.amount,
- timestamp: Utc::now(),
- parents: vec![],
- signature: tx.signature.clone().unwrap_or_default(),
- public_key: tx.public_key.clone(),
- fee: tx.fee,
- payload: Some(tx.payload.to_string()),
- chain_id: "ouroboros-mainnet-1".to_string(), // Phase 6: replay protection
- nonce: 0, // Phase 6: transaction ordering
- };
+    for tx in batch {
+        let dag_transaction = Transaction {
+            id: tx.tx_id,
+            sender: tx.sender.clone(),
+            recipient: tx.recipient.clone(),
+            amount: tx.amount,
+            timestamp: Utc::now(),
+            parents: vec![],
+            signature: tx.signature.clone().unwrap_or_default(),
+            public_key: tx.public_key.clone(),
+            fee: tx.fee,
+            payload: Some(tx.payload.to_string()),
+            chain_id: "ouroboros-mainnet-1".to_string(), // Phase 6: replay protection
+            nonce: 0,                                    // Phase 6: transaction ordering
+        };
 
- let mempool_key = format!("mempool:{}", tx.tx_id);
- crate::storage::put(db, mempool_key.into_bytes(), &dag_transaction)
- .map_err(|e| anyhow::anyhow!("RocksDB put error: {}", e))?;
- }
+        let mempool_key = format!("mempool:{}", tx.tx_id);
+        crate::storage::put(db, mempool_key.into_bytes(), &dag_transaction)
+            .map_err(|e| anyhow::anyhow!("RocksDB put error: {}", e))?;
+    }
 
- Ok(())
+    Ok(())
 }

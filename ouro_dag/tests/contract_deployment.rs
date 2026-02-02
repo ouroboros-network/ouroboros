@@ -92,7 +92,10 @@ mod contract_deployment_tests {
         assert!(deployment_gas < gas_limit, "Deployment exceeds gas limit");
 
         let remaining_gas = gas_limit - deployment_gas;
-        println!("✅ Deployment gas: {}, Remaining: {}", deployment_gas, remaining_gas);
+        println!(
+            "✅ Deployment gas: {}, Remaining: {}",
+            deployment_gas, remaining_gas
+        );
     }
 
     /// Test contract deployment with insufficient gas
@@ -103,7 +106,10 @@ mod contract_deployment_tests {
         let deployment_gas = contract_size * gas_per_byte;
         let gas_limit = 100_000; // Too low
 
-        assert!(deployment_gas > gas_limit, "Should fail due to insufficient gas");
+        assert!(
+            deployment_gas > gas_limit,
+            "Should fail due to insufficient gas"
+        );
 
         println!("✅ Correctly rejected deployment with insufficient gas");
     }
@@ -120,7 +126,10 @@ mod contract_deployment_tests {
         }
 
         assert_eq!(deployed_contracts.len(), 5);
-        println!("✅ Successfully tracked {} deployed contracts", deployed_contracts.len());
+        println!(
+            "✅ Successfully tracked {} deployed contracts",
+            deployed_contracts.len()
+        );
     }
 
     /// Test contract code hash verification
@@ -186,7 +195,10 @@ mod contract_deployment_tests {
         assert!(total_storage < max_storage_size, "Storage limit exceeded");
 
         let remaining = max_storage_size - total_storage;
-        println!("✅ Storage check passed. Remaining: {} MB", remaining / (1024 * 1024));
+        println!(
+            "✅ Storage check passed. Remaining: {} MB",
+            remaining / (1024 * 1024)
+        );
     }
 
     /// Test contract deployment metadata
@@ -218,7 +230,10 @@ mod contract_deployment_tests {
         assert!(metadata.deploy_block > 0);
         assert!(metadata.initial_gas_paid > 0);
 
-        println!("✅ Deployment metadata validated: {:?}", metadata.contract_name);
+        println!(
+            "✅ Deployment metadata validated: {:?}",
+            metadata.contract_name
+        );
     }
 }
 
@@ -276,10 +291,8 @@ mod contract_execution_tests {
     /// Test read-only contract call (view function)
     #[test]
     fn test_view_function() {
-        let balances: HashMap<String, u64> = HashMap::from([
-            ("alice".to_string(), 1000),
-            ("bob".to_string(), 500),
-        ]);
+        let balances: HashMap<String, u64> =
+            HashMap::from([("alice".to_string(), 1000), ("bob".to_string(), 500)]);
 
         let alice_balance = balances.get("alice").unwrap();
 
@@ -329,14 +342,17 @@ mod contract_execution_tests {
 
         // Simulate operations
         gas_used += 21_000; // Base transaction cost
-        gas_used += 5_000;  // Storage write
-        gas_used += 3_000;  // Computation
-        gas_used += 1_000;  // Event emission
+        gas_used += 5_000; // Storage write
+        gas_used += 3_000; // Computation
+        gas_used += 1_000; // Event emission
 
         assert!(gas_used < gas_limit, "Gas limit exceeded");
 
         let remaining = gas_limit - gas_used;
-        println!("✅ Gas tracking: used {}, remaining {}", gas_used, remaining);
+        println!(
+            "✅ Gas tracking: used {}, remaining {}",
+            gas_used, remaining
+        );
     }
 
     /// Test out-of-gas scenario
@@ -355,9 +371,7 @@ mod contract_execution_tests {
     /// Test revert on failure
     #[test]
     fn test_revert_on_failure() {
-        let mut balances: HashMap<String, u64> = HashMap::from([
-            ("alice".to_string(), 1000),
-        ]);
+        let mut balances: HashMap<String, u64> = HashMap::from([("alice".to_string(), 1000)]);
 
         // Save checkpoint
         let checkpoint = balances.clone();
@@ -385,9 +399,7 @@ mod contract_execution_tests {
             *balances.get(address).unwrap_or(&0)
         }
 
-        let balances: HashMap<String, u64> = HashMap::from([
-            ("alice".to_string(), 1000),
-        ]);
+        let balances: HashMap<String, u64> = HashMap::from([("alice".to_string(), 1000)]);
 
         let balance = get_balance("alice", &balances);
         assert_eq!(balance, 1000);
@@ -420,7 +432,10 @@ mod contract_execution_tests {
         assert_eq!(stack.calls.len(), 3);
         assert!(stack.calls.len() < stack.max_depth, "Call stack depth OK");
 
-        println!("✅ Nested contract calls tracked: depth {}", stack.calls.len());
+        println!(
+            "✅ Nested contract calls tracked: depth {}",
+            stack.calls.len()
+        );
     }
 
     /// Test call stack depth limit

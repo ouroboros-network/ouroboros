@@ -1,7 +1,7 @@
 // src/escrow/mod.rs
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use chrono::{Utc, DateTime};
 
 /// Simple escrow manager using RocksDB for storage.
 /// TODO_ROCKSDB: Implement all escrow operations with RocksDB
@@ -11,10 +11,20 @@ pub struct EscrowManager {
 }
 
 impl EscrowManager {
-    pub fn new() -> Self { Self {} }
+    pub fn new() -> Self {
+        Self {}
+    }
 
     /// Create an escrow (currently stubbed - needs RocksDB implementation)
-    pub async fn create_escrow(&self, _escrow_id: Uuid, _from: &str, _to_microchain: uuid::Uuid, _amount: i64, _nonce: i64, _expiry: DateTime<Utc>) -> Result<()> {
+    pub async fn create_escrow(
+        &self,
+        _escrow_id: Uuid,
+        _from: &str,
+        _to_microchain: uuid::Uuid,
+        _amount: i64,
+        _nonce: i64,
+        _expiry: DateTime<Utc>,
+    ) -> Result<()> {
         // TODO_ROCKSDB: Implement with RocksDB
         // - Check balance in RocksDB
         // - Debit sender balance

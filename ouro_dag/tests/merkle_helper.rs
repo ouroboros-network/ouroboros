@@ -1,6 +1,6 @@
 // tests/merkle_helper.rs
 use ouro_dag::crypto::merkle::merkle_root_from_leaves_bytes;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 // Helper to hash leaf with domain separation (0x00 prefix)
 fn hash_leaf(data: &[u8]) -> Vec<u8> {

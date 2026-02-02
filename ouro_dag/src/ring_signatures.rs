@@ -1,14 +1,10 @@
 // Ring signatures for sender privacy (Monero-style)
 // Mixes real signer with decoys
 
-use curve25519_dalek::{
-    edwards::EdwardsPoint,
-    scalar::Scalar,
-    constants::ED25519_BASEPOINT_TABLE,
-};
-use sha2::{Sha512, Digest};
-use serde::{Serialize, Deserialize};
+use curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE, edwards::EdwardsPoint, scalar::Scalar};
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha512};
 
 /// Ring signature
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,7 +37,9 @@ pub fn sign_ring(
 
     // Parse secret key
     let x = Scalar::from_bytes_mod_order(
-        secret_key.try_into().map_err(|_| "Invalid secret key".to_string())?
+        secret_key
+            .try_into()
+            .map_err(|_| "Invalid secret key".to_string())?,
     );
 
     // Compute key image I = xH(P)
@@ -79,10 +77,11 @@ pub fn sign_ring(
         alpha[idx] = Scalar::from_bytes_mod_order(alpha_bytes);
 
         // Parse public key
-        let pk_bytes: [u8; 32] = public_keys[idx].as_slice().try_into()
+        let pk_bytes: [u8; 32] = public_keys[idx]
+            .as_slice()
+            .try_into()
             .map_err(|_| "Invalid public key".to_string())?;
-        let pk = decompress_point(&pk_bytes)
-            .ok_or("Invalid point".to_string())?;
+        let pk = decompress_point(&pk_bytes).ok_or("Invalid point".to_string())?;
 
         // L_i = alpha_i * G + c_i * P_i
         let l_i = (ED25519_BASEPOINT_TABLE * &alpha[idx]) + (&pk * &c[idx]);
@@ -90,8 +89,12 @@ pub fn sign_ring(
         // R_i = alpha_i * H(P_i) + c_i * I
         let hp_i = hash_to_point(&pk);
         let key_img_point = decompress_point(
-            &key_image.clone().try_into().map_err(|_| "Invalid key image".to_string())?
-        ).ok_or("Invalid key image point".to_string())?;
+            &key_image
+                .clone()
+                .try_into()
+                .map_err(|_| "Invalid key image".to_string())?,
+        )
+        .ok_or("Invalid key image point".to_string())?;
         let r_i = (&alpha[idx] * &hp_i) + (&c[idx] * &key_img_point);
 
         // Hash to get next c
@@ -109,7 +112,10 @@ pub fn sign_ring(
         key_image: key_image.to_vec(),
         ring: public_keys.to_vec(),
         c: c.iter().map(|s: &Scalar| s.to_bytes().to_vec()).collect(),
-        r: alpha.iter().map(|s: &Scalar| s.to_bytes().to_vec()).collect(),
+        r: alpha
+            .iter()
+            .map(|s: &Scalar| s.to_bytes().to_vec())
+            .collect(),
     })
 }
 
@@ -121,25 +127,35 @@ pub fn verify_ring(signature: &RingSignature, message: &[u8]) -> Result<bool, St
         return Err("Invalid signature format".to_string());
     }
 
-    let key_img_bytes: [u8; 32] = signature.key_image.clone().try_into()
+    let key_img_bytes: [u8; 32] = signature
+        .key_image
+        .clone()
+        .try_into()
         .map_err(|_| "Invalid key image".to_string())?;
-    let key_img_point = decompress_point(&key_img_bytes)
-        .ok_or("Invalid key image point".to_string())?;
+    let key_img_point =
+        decompress_point(&key_img_bytes).ok_or("Invalid key image point".to_string())?;
 
     let mut c_next = Scalar::from_bytes_mod_order(
-        signature.c[0].clone().try_into().map_err(|_| "Invalid c".to_string())?
+        signature.c[0]
+            .clone()
+            .try_into()
+            .map_err(|_| "Invalid c".to_string())?,
     );
 
     for i in 0..ring_size {
         let alpha = Scalar::from_bytes_mod_order(
-            signature.r[i].clone().try_into().map_err(|_| "Invalid r".to_string())?
+            signature.r[i]
+                .clone()
+                .try_into()
+                .map_err(|_| "Invalid r".to_string())?,
         );
         let c_i = c_next;
 
-        let pk_bytes: [u8; 32] = signature.ring[i].clone().try_into()
+        let pk_bytes: [u8; 32] = signature.ring[i]
+            .clone()
+            .try_into()
             .map_err(|_| "Invalid ring member".to_string())?;
-        let pk = decompress_point(&pk_bytes)
-            .ok_or("Invalid public key point".to_string())?;
+        let pk = decompress_point(&pk_bytes).ok_or("Invalid public key point".to_string())?;
 
         // L_i = alpha_i * G + c_i * P_i
         let l_i = (ED25519_BASEPOINT_TABLE * &alpha) + (&pk * &c_i);
@@ -154,7 +170,10 @@ pub fn verify_ring(signature: &RingSignature, message: &[u8]) -> Result<bool, St
 
     // Verify ring closes
     let c_0 = Scalar::from_bytes_mod_order(
-        signature.c[0].clone().try_into().map_err(|_| "Invalid c[0]".to_string())?
+        signature.c[0]
+            .clone()
+            .try_into()
+            .map_err(|_| "Invalid c[0]".to_string())?,
     );
 
     Ok(c_next == c_0)
@@ -174,9 +193,7 @@ fn hash_to_point(point: &EdwardsPoint) -> EdwardsPoint {
     hasher.update(point.compress().as_bytes());
     let hash = hasher.finalize();
 
-    let scalar = Scalar::from_bytes_mod_order(
-        hash[0..32].try_into().unwrap()
-    );
+    let scalar = Scalar::from_bytes_mod_order(hash[0..32].try_into().unwrap());
 
     ED25519_BASEPOINT_TABLE * &scalar
 }
@@ -189,9 +206,7 @@ fn hash_points(message: &[u8], l: &EdwardsPoint, r: &EdwardsPoint) -> Scalar {
     hasher.update(r.compress().as_bytes());
     let hash = hasher.finalize();
 
-    Scalar::from_bytes_mod_order(
-        hash[0..32].try_into().unwrap()
-    )
+    Scalar::from_bytes_mod_order(hash[0..32].try_into().unwrap())
 }
 
 /// Decompress point
@@ -228,7 +243,7 @@ mod tests {
 
         let ring = vec![
             pk1.to_vec(),
-            pubkey.to_vec(),  // Real key at index 1
+            pubkey.to_vec(), // Real key at index 1
             pk2.to_vec(),
         ];
 

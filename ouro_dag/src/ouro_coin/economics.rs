@@ -27,9 +27,9 @@ pub struct FeeDistribution {
 impl Default for FeeDistribution {
     fn default() -> Self {
         Self {
-            validators: 0.70, // 70%
-            burn: 0.10,       // 10%
-            treasury: 0.10,   // 10%
+            validators: 0.70,    // 70%
+            burn: 0.10,          // 10%
+            treasury: 0.10,      // 10%
             app_developer: 0.10, // 10%
         }
     }
@@ -246,7 +246,8 @@ impl DemandBasedRelease {
 
     /// Get available supply (unlocked - distributed)
     pub fn available_supply(&self) -> u64 {
-        self.unlocked_supply().saturating_sub(self.total_distributed)
+        self.unlocked_supply()
+            .saturating_sub(self.total_distributed)
     }
 
     /// Get remaining reserve (not yet unlocked)
@@ -317,18 +318,15 @@ impl DemandBasedRelease {
 
     /// Check and unlock if needed based on current circulation
     /// This should be called periodically (e.g., every block)
-    pub fn check_and_unlock(
-        &mut self,
-        current_circulating: u64,
-        current_time: u64,
-    ) -> Option<u64> {
+    pub fn check_and_unlock(&mut self, current_circulating: u64, current_time: u64) -> Option<u64> {
         if self.should_unlock_next(current_circulating) {
             let threshold_pct = (UNLOCK_THRESHOLD_PERCENT * 100.0) as u64;
             let reason = format!(
                 "Circulation dropped below {}% threshold ({} < {})",
                 threshold_pct,
                 current_circulating / super::OURO_UNIT,
-                (self.unlocked_supply() as f64 * UNLOCK_THRESHOLD_PERCENT) as u64 / super::OURO_UNIT
+                (self.unlocked_supply() as f64 * UNLOCK_THRESHOLD_PERCENT) as u64
+                    / super::OURO_UNIT
             );
 
             match self.unlock_next_tranche(current_time, &reason) {
@@ -409,7 +407,7 @@ impl Default for ValidatorEconomics {
     fn default() -> Self {
         Self {
             min_stake: 100 * super::OURO_UNIT, // 100 OURO
-            estimated_apy: 0.50, // 50% APY (conservative estimate)
+            estimated_apy: 0.50,               // 50% APY (conservative estimate)
         }
     }
 }
@@ -433,15 +431,18 @@ mod tests {
         let allocation = dist.distribute(total_fee);
 
         assert_eq!(allocation.validators_amount, 700_000); // 70%
-        assert_eq!(allocation.burn_amount, 100_000);       // 10%
-        assert_eq!(allocation.treasury_amount, 100_000);   // 10%
+        assert_eq!(allocation.burn_amount, 100_000); // 10%
+        assert_eq!(allocation.treasury_amount, 100_000); // 10%
         assert_eq!(allocation.app_developer_amount, 100_000); // 10%
     }
 
     #[test]
     fn test_token_distribution_validates() {
         let dist = TokenDistribution::default();
-        assert!(dist.validate(), "Token distribution should equal total supply");
+        assert!(
+            dist.validate(),
+            "Token distribution should equal total supply"
+        );
         assert_eq!(dist.total(), 103_000_000); // 103M total
     }
 
@@ -507,7 +508,9 @@ mod tests {
         let mut release = DemandBasedRelease::new(genesis_time);
 
         // Unlock first tranche
-        let amount = release.unlock_next_tranche(genesis_time + 1000, "Test unlock").unwrap();
+        let amount = release
+            .unlock_next_tranche(genesis_time + 1000, "Test unlock")
+            .unwrap();
         assert_eq!(amount, 10_000_000 * OURO_UNIT);
         assert_eq!(release.unlocked_count(), 1);
         assert_eq!(release.total_unlocked, 10_000_000 * OURO_UNIT);
@@ -523,7 +526,9 @@ mod tests {
 
         // Unlock all 9 tranches
         for i in 1..=9 {
-            let amount = release.unlock_next_tranche(genesis_time + i * 1000, "Test").unwrap();
+            let amount = release
+                .unlock_next_tranche(genesis_time + i * 1000, "Test")
+                .unwrap();
             assert_eq!(amount, 10_000_000 * OURO_UNIT);
         }
 
@@ -536,7 +541,9 @@ mod tests {
         assert_eq!(release.unlocked_supply(), 103_000_000 * OURO_UNIT);
 
         // Can't unlock more
-        assert!(release.unlock_next_tranche(genesis_time + 10000, "Test").is_err());
+        assert!(release
+            .unlock_next_tranche(genesis_time + 10000, "Test")
+            .is_err());
     }
 
     #[test]
@@ -546,7 +553,9 @@ mod tests {
 
         // High circulation: no unlock
         let high = 12_000_000 * OURO_UNIT;
-        assert!(release.check_and_unlock(high, genesis_time + 1000).is_none());
+        assert!(release
+            .check_and_unlock(high, genesis_time + 1000)
+            .is_none());
 
         // Low circulation: triggers unlock
         let low = 5_000_000 * OURO_UNIT;

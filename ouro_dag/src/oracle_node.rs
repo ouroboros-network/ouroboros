@@ -1,13 +1,13 @@
 // Independent Oracle Node (can run separately from validators)
 // Hybrid design: semi-independent from Ouroboros blockchain
 
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use std::sync::Arc;
-use sha2::{Sha256, Digest};
-use ed25519_dalek::{SigningKey, Signature, Signer};
+use ed25519_dalek::{Signature, Signer, SigningKey};
 use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Global oracle registry instance (initialized once during startup)
 static GLOBAL_ORACLE_REGISTRY: OnceCell<Arc<OracleNodeRegistry>> = OnceCell::new();
@@ -26,10 +26,12 @@ pub fn get_global_oracle_registry() -> Option<Arc<OracleNodeRegistry>> {
 
 /// Get or create the global oracle registry (with default stake).
 pub fn get_or_init_oracle_registry() -> Arc<OracleNodeRegistry> {
-    GLOBAL_ORACLE_REGISTRY.get_or_init(|| {
-        // Default minimum stake: 5,000 OURO (same as subchain deposit)
-        Arc::new(OracleNodeRegistry::new(500_000_000_000)) // 5,000 OURO
-    }).clone()
+    GLOBAL_ORACLE_REGISTRY
+        .get_or_init(|| {
+            // Default minimum stake: 5,000 OURO (same as subchain deposit)
+            Arc::new(OracleNodeRegistry::new(500_000_000_000)) // 5,000 OURO
+        })
+        .clone()
 }
 
 /// Oracle node configuration
@@ -196,11 +198,7 @@ impl OracleNode {
         // Use universal fetcher to get data from all free APIs
         let data = crate::oracle_fetchers::UniversalFetcher::fetch_by_feed_id(feed_id).await?;
 
-        log::info!(
-            "Fetched data for {} ({} bytes)",
-            feed_id,
-            data.len()
-        );
+        log::info!("Fetched data for {} ({} bytes)", feed_id, data.len());
 
         Ok(data)
     }
@@ -366,15 +364,9 @@ impl OracleNodeRegistry {
     }
 
     /// Update node statistics
-    pub async fn update_node_stats(
-        &self,
-        operator_id: &str,
-        correct: bool,
-    ) -> Result<(), String> {
+    pub async fn update_node_stats(&self, operator_id: &str, correct: bool) -> Result<(), String> {
         let mut nodes = self.nodes.write().await;
-        let node = nodes
-            .get_mut(operator_id)
-            .ok_or("Node not found")?;
+        let node = nodes.get_mut(operator_id).ok_or("Node not found")?;
 
         node.total_submissions += 1;
         if correct {

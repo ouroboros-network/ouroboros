@@ -1,5 +1,5 @@
 // Staking and delegation system
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -45,46 +45,71 @@ impl StakingManager {
         }
     }
 
-    pub fn register_validator(&mut self, address: String, stake: u64, commission: u16) -> Result<(), String> {
+    pub fn register_validator(
+        &mut self,
+        address: String,
+        stake: u64,
+        commission: u16,
+    ) -> Result<(), String> {
         if stake < self.min_stake {
             return Err(format!("Minimum stake is {}", self.min_stake));
         }
 
-        self.validators.insert(address.clone(), Validator {
-            address,
-            self_stake: stake,
-            delegated_stake: 0,
-            commission_rate: commission,
-            total_rewards: 0,
-            active: true,
-        });
+        self.validators.insert(
+            address.clone(),
+            Validator {
+                address,
+                self_stake: stake,
+                delegated_stake: 0,
+                commission_rate: commission,
+                total_rewards: 0,
+                active: true,
+            },
+        );
 
         Ok(())
     }
 
-    pub fn delegate(&mut self, delegator: String, validator: String, amount: u64) -> Result<(), String> {
-        let val = self.validators.get_mut(&validator).ok_or("Validator not found")?;
+    pub fn delegate(
+        &mut self,
+        delegator: String,
+        validator: String,
+        amount: u64,
+    ) -> Result<(), String> {
+        let val = self
+            .validators
+            .get_mut(&validator)
+            .ok_or("Validator not found")?;
         val.delegated_stake += amount;
 
-        self.delegations.entry(delegator.clone()).or_insert_with(Vec::new).push(Delegation {
-            delegator,
-            validator,
-            amount,
-            rewards: 0,
-        });
+        self.delegations
+            .entry(delegator.clone())
+            .or_insert_with(Vec::new)
+            .push(Delegation {
+                delegator,
+                validator,
+                amount,
+                rewards: 0,
+            });
 
         Ok(())
     }
 
     pub fn distribute_rewards(&mut self, validator: &str, block_reward: u64) -> Result<(), String> {
-        let val = self.validators.get_mut(validator).ok_or("Validator not found")?;
+        let val = self
+            .validators
+            .get_mut(validator)
+            .ok_or("Validator not found")?;
 
         let commission = (block_reward * val.commission_rate as u64) / 10000;
         let delegator_share = block_reward - commission;
 
         val.total_rewards += commission;
 
-        let delegations = self.delegations.get_mut(validator).ok_or("No delegations")?;
+        let delegations = self
+            .delegations
+            .get_mut(validator)
+            .ok_or("No delegations")?;
 
         for del in delegations.iter_mut() {
             let share = (delegator_share * del.amount) / val.delegated_stake;
@@ -95,18 +120,25 @@ impl StakingManager {
     }
 
     pub fn get_total_stake(&self, validator: &str) -> u64 {
-        self.validators.get(validator).map(|v| v.self_stake + v.delegated_stake).unwrap_or(0)
+        self.validators
+            .get(validator)
+            .map(|v| v.self_stake + v.delegated_stake)
+            .unwrap_or(0)
     }
 
     pub fn get_active_validators(&self) -> Vec<String> {
-        self.validators.values()
+        self.validators
+            .values()
             .filter(|v| v.active && v.self_stake >= self.min_stake)
             .map(|v| v.address.clone())
             .collect()
     }
 
     /// Sync active validators with BFT validator registry
-    pub fn sync_to_validator_registry(&self, registry: &Arc<crate::bft::validator_registry::ValidatorRegistry>) {
+    pub fn sync_to_validator_registry(
+        &self,
+        registry: &Arc<crate::bft::validator_registry::ValidatorRegistry>,
+    ) {
         for (addr, validator) in &self.validators {
             let total_stake = self.get_total_stake(addr);
             if validator.active && total_stake >= self.min_stake {
@@ -122,7 +154,8 @@ impl StakingManager {
 
     /// Get validators sorted by total stake
     pub fn get_validators_by_stake(&self) -> Vec<(String, u64)> {
-        let mut validators: Vec<_> = self.validators
+        let mut validators: Vec<_> = self
+            .validators
             .iter()
             .filter(|(_, v)| v.active)
             .map(|(addr, v)| (addr.clone(), self.get_total_stake(addr)))
@@ -140,8 +173,12 @@ mod tests {
     fn test_staking() {
         let mut staking = StakingManager::new(1000, 86400);
 
-        staking.register_validator("val1".to_string(), 5000, 500).unwrap();
-        staking.delegate("alice".to_string(), "val1".to_string(), 1000).unwrap();
+        staking
+            .register_validator("val1".to_string(), 5000, 500)
+            .unwrap();
+        staking
+            .delegate("alice".to_string(), "val1".to_string(), 1000)
+            .unwrap();
 
         assert_eq!(staking.get_total_stake("val1"), 6000);
     }

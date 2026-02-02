@@ -3,25 +3,24 @@
 // Migrated from PostgreSQL to RocksDB
 
 use anyhow::Result;
-use uuid::Uuid;
-use sha2::{Sha256, Digest};
-use ouro_dag::subchain::messages::MicroAnchorLeaf;
-use ouro_dag::crypto::merkle::merkle_root_from_leaves_bytes;
-use ouro_dag::storage;
-use serde_json;
-use std::fs;
-use std::path::PathBuf;
-use std::env;
 use chrono::Utc;
 use log::{info, warn};
+use ouro_dag::crypto::merkle::merkle_root_from_leaves_bytes;
+use ouro_dag::storage;
+use ouro_dag::subchain::messages::MicroAnchorLeaf;
+use serde_json;
+use sha2::{Digest, Sha256};
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
 
     // Initialize RocksDB
-    let db_path = env::var("ROCKSDB_PATH")
-        .unwrap_or_else(|_| "rocksdb_data".to_string());
+    let db_path = env::var("ROCKSDB_PATH").unwrap_or_else(|_| "rocksdb_data".to_string());
 
     let db = storage::open_db(&db_path);
 
@@ -29,12 +28,13 @@ async fn main() -> Result<()> {
     let max_claims = 1000usize;
 
     // Read provisional claims from RocksDB
-    let claims: Vec<(Uuid, String, String, u64)> = storage::iter_prefix::<(Uuid, String, String, u64)>(&db, b"provisional_claim:")
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|(_, _, _, finalized)| *finalized == 0) // 0 = not finalized
-        .take(max_claims)
-        .collect();
+    let claims: Vec<(Uuid, String, String, u64)> =
+        storage::iter_prefix::<(Uuid, String, String, u64)>(&db, b"provisional_claim:")
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, _, _, finalized)| *finalized == 0) // 0 = not finalized
+            .take(max_claims)
+            .collect();
 
     if claims.is_empty() {
         info!("No provisional claims to aggregate");

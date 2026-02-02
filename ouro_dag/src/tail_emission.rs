@@ -20,8 +20,8 @@ impl Default for EmissionConfig {
     fn default() -> Self {
         Self {
             initial_reward: 50_000_000, // 0.5 OURO per block (~3.15% year 1 inflation)
-            halving_blocks: 6_307_200, // ~1 year at 5 sec blocks (17,280 blocks/day)
-            tail_reward: 10_000_000, // 0.1 OURO perpetual (~0.63% long-term inflation)
+            halving_blocks: 6_307_200,  // ~1 year at 5 sec blocks (17,280 blocks/day)
+            tail_reward: 10_000_000,    // 0.1 OURO perpetual (~0.63% long-term inflation)
             supply_cap: 103_000_000 * 100_000_000, // 103M OURO hard cap
         }
     }
@@ -84,7 +84,8 @@ pub fn total_supply_at_height(height: u64, config: &EmissionConfig) -> u64 {
         let mut current_reward = config.initial_reward;
 
         while current_height < height {
-            let next_halving = ((current_height / config.halving_blocks) + 1) * config.halving_blocks;
+            let next_halving =
+                ((current_height / config.halving_blocks) + 1) * config.halving_blocks;
             let blocks_in_period = if next_halving < height {
                 next_halving - current_height
             } else {
@@ -174,8 +175,14 @@ mod tests {
 
         // Verify tail emission is constant at 0.1 OURO = 10,000,000 units
         assert_eq!(calculate_block_reward(tail_height, &config), 10_000_000);
-        assert_eq!(calculate_block_reward(tail_height + 1_000_000, &config), 10_000_000);
-        assert_eq!(calculate_block_reward(tail_height + 10_000_000, &config), 10_000_000);
+        assert_eq!(
+            calculate_block_reward(tail_height + 1_000_000, &config),
+            10_000_000
+        );
+        assert_eq!(
+            calculate_block_reward(tail_height + 10_000_000, &config),
+            10_000_000
+        );
     }
 
     #[test]
@@ -183,7 +190,7 @@ mod tests {
         // Use custom config for smooth decay test (higher values for visible decay)
         let config = EmissionConfig {
             initial_reward: 50_000_000_000, // Higher starting value for testing
-            halving_blocks: 0, // Smooth decay mode
+            halving_blocks: 0,              // Smooth decay mode
             tail_reward: 600_000_000,
             supply_cap: 0,
         };

@@ -7,17 +7,17 @@ mod gas_analysis_tests {
     use std::collections::HashMap;
 
     /// Gas cost constants (based on common blockchain gas models)
-    const GAS_TX_BASE: u64 = 21_000;           // Base transaction cost
-    const GAS_STORAGE_WRITE: u64 = 20_000;     // Storage slot write
-    const GAS_STORAGE_READ: u64 = 200;         // Storage slot read
-    const GAS_MEMORY: u64 = 3;                 // Per byte memory
-    const GAS_SHA256: u64 = 60;                // SHA256 hash per round
-    const GAS_ECRECOVER: u64 = 3_000;          // Signature verification
-    const GAS_LOG: u64 = 375;                  // Log/event base cost
-    const GAS_LOG_DATA: u64 = 8;               // Per byte logged
-    const GAS_CALL: u64 = 700;                 // External call
-    const GAS_CREATE: u64 = 32_000;            // Contract creation
-    const GAS_COPY: u64 = 3;                   // Memory copy per byte
+    const GAS_TX_BASE: u64 = 21_000; // Base transaction cost
+    const GAS_STORAGE_WRITE: u64 = 20_000; // Storage slot write
+    const GAS_STORAGE_READ: u64 = 200; // Storage slot read
+    const GAS_MEMORY: u64 = 3; // Per byte memory
+    const GAS_SHA256: u64 = 60; // SHA256 hash per round
+    const GAS_ECRECOVER: u64 = 3_000; // Signature verification
+    const GAS_LOG: u64 = 375; // Log/event base cost
+    const GAS_LOG_DATA: u64 = 8; // Per byte logged
+    const GAS_CALL: u64 = 700; // External call
+    const GAS_CREATE: u64 = 32_000; // Contract creation
+    const GAS_COPY: u64 = 3; // Memory copy per byte
 
     #[derive(Debug)]
     struct GasTracker {
@@ -68,11 +68,16 @@ mod gas_analysis_tests {
         let mut gas = GasTracker::new(100_000);
 
         // Token transfer operation
-        gas.use_gas("Read sender balance", GAS_STORAGE_READ).unwrap();
-        gas.use_gas("Read recipient balance", GAS_STORAGE_READ).unwrap();
-        gas.use_gas("Update sender balance", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Update recipient balance", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Emit Transfer event", GAS_LOG + GAS_LOG_DATA * 32).unwrap();
+        gas.use_gas("Read sender balance", GAS_STORAGE_READ)
+            .unwrap();
+        gas.use_gas("Read recipient balance", GAS_STORAGE_READ)
+            .unwrap();
+        gas.use_gas("Update sender balance", GAS_STORAGE_WRITE)
+            .unwrap();
+        gas.use_gas("Update recipient balance", GAS_STORAGE_WRITE)
+            .unwrap();
+        gas.use_gas("Emit Transfer event", GAS_LOG + GAS_LOG_DATA * 32)
+            .unwrap();
 
         // Gas: 21,000 (base) + 200 + 200 + 20,000 + 20,000 + 631 = ~62k gas
         assert!(gas.gas_used < 70_000, "Token transfer should be < 70k gas");
@@ -88,11 +93,15 @@ mod gas_analysis_tests {
         // NFT mint operation
         gas.use_gas("Read next token ID", GAS_STORAGE_READ).unwrap();
         gas.use_gas("Write token owner", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Read recipient balance", GAS_STORAGE_READ).unwrap();
-        gas.use_gas("Update recipient balance", GAS_STORAGE_WRITE).unwrap();
+        gas.use_gas("Read recipient balance", GAS_STORAGE_READ)
+            .unwrap();
+        gas.use_gas("Update recipient balance", GAS_STORAGE_WRITE)
+            .unwrap();
         gas.use_gas("Write token URI", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Update next token ID", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Emit Mint event", GAS_LOG + GAS_LOG_DATA * 64).unwrap();
+        gas.use_gas("Update next token ID", GAS_STORAGE_WRITE)
+            .unwrap();
+        gas.use_gas("Emit Mint event", GAS_LOG + GAS_LOG_DATA * 64)
+            .unwrap();
 
         // Gas: 21,000 (base) + 400 (2 reads) + 80,000 (4 writes) + 887 = ~102k gas
         assert!(gas.gas_used < 110_000, "NFT mint should be < 110k gas");
@@ -111,9 +120,12 @@ mod gas_analysis_tests {
         gas.use_gas("Calculate output", 500).unwrap(); // Complex math
         gas.use_gas("Update reserve A", GAS_STORAGE_WRITE).unwrap();
         gas.use_gas("Update reserve B", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Update user balance A", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Update user balance B", GAS_STORAGE_WRITE).unwrap();
-        gas.use_gas("Emit Swap event", GAS_LOG + GAS_LOG_DATA * 96).unwrap();
+        gas.use_gas("Update user balance A", GAS_STORAGE_WRITE)
+            .unwrap();
+        gas.use_gas("Update user balance B", GAS_STORAGE_WRITE)
+            .unwrap();
+        gas.use_gas("Emit Swap event", GAS_LOG + GAS_LOG_DATA * 96)
+            .unwrap();
 
         assert!(gas.gas_used < 150_000, "DEX swap should be < 150k gas");
 
@@ -128,9 +140,15 @@ mod gas_analysis_tests {
 
         // Contract deployment
         gas.use_gas("Create contract", GAS_CREATE).unwrap();
-        gas.use_gas(&format!("Store code ({} bytes)", contract_size), contract_size * 200).unwrap();
-        gas.use_gas("Initialize state", GAS_STORAGE_WRITE * 5).unwrap();
-        gas.use_gas("Emit Deploy event", GAS_LOG + GAS_LOG_DATA * 32).unwrap();
+        gas.use_gas(
+            &format!("Store code ({} bytes)", contract_size),
+            contract_size * 200,
+        )
+        .unwrap();
+        gas.use_gas("Initialize state", GAS_STORAGE_WRITE * 5)
+            .unwrap();
+        gas.use_gas("Emit Deploy event", GAS_LOG + GAS_LOG_DATA * 32)
+            .unwrap();
 
         // Gas: 21,000 (base) + 32,000 (create) + 200,000 (code) + 100,000 (init) + 631 = ~354k
         assert!(gas.gas_used < 500_000, "Contract deployment within limit");
@@ -145,15 +163,27 @@ mod gas_analysis_tests {
 
         // Batch transfer (10 transfers)
         for i in 1..=10 {
-            gas.use_gas(&format!("Transfer #{} - read balances", i), GAS_STORAGE_READ * 2).unwrap();
-            gas.use_gas(&format!("Transfer #{} - update balances", i), GAS_STORAGE_WRITE * 2).unwrap();
-            gas.use_gas(&format!("Transfer #{} - emit event", i), GAS_LOG).unwrap();
+            gas.use_gas(
+                &format!("Transfer #{} - read balances", i),
+                GAS_STORAGE_READ * 2,
+            )
+            .unwrap();
+            gas.use_gas(
+                &format!("Transfer #{} - update balances", i),
+                GAS_STORAGE_WRITE * 2,
+            )
+            .unwrap();
+            gas.use_gas(&format!("Transfer #{} - emit event", i), GAS_LOG)
+                .unwrap();
         }
 
         let avg_per_transfer = gas.gas_used / 10;
         println!("Average gas per transfer in batch: {}", avg_per_transfer);
 
-        assert!(avg_per_transfer < 50_000, "Batch operations should be efficient");
+        assert!(
+            avg_per_transfer < 50_000,
+            "Batch operations should be efficient"
+        );
 
         gas.report();
         println!("✅ Batch operations gas analysis complete");
@@ -169,7 +199,10 @@ mod gas_analysis_tests {
         gas.use_gas("Verify signature", GAS_ECRECOVER).unwrap();
 
         // Gas: 21,000 (base) + 200 + 120 + 3,000 = ~24,320
-        assert!(gas.gas_used < 30_000, "Signature verification should be reasonable");
+        assert!(
+            gas.gas_used < 30_000,
+            "Signature verification should be reasonable"
+        );
 
         gas.report();
         println!("✅ Signature verification gas analysis complete");
@@ -290,7 +323,10 @@ mod gas_analysis_tests {
                 gas_limit: 2_100_000, // Base + 100 * (read + write) + event = ~2.03M
                 operations: vec![
                     ("Base TX", GAS_TX_BASE),
-                    ("Process 100 items", (GAS_STORAGE_READ + GAS_STORAGE_WRITE) * 100),
+                    (
+                        "Process 100 items",
+                        (GAS_STORAGE_READ + GAS_STORAGE_WRITE) * 100,
+                    ),
                     ("Batch event", GAS_LOG + GAS_LOG_DATA * 1000),
                 ],
             },
@@ -306,7 +342,10 @@ mod gas_analysis_tests {
             println!("   Scenario: {}", scenario.name);
             println!("      Limit: {} gas", scenario.gas_limit);
             println!("      Used: {} gas", total_gas);
-            println!("      Status: {}", if success { "✅ SUCCESS" } else { "❌ FAIL" });
+            println!(
+                "      Status: {}",
+                if success { "✅ SUCCESS" } else { "❌ FAIL" }
+            );
             println!("      Remaining: {} gas\n", remaining);
 
             assert!(success, "Scenario '{}' exceeded gas limit", scenario.name);

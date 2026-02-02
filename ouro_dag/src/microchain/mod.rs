@@ -1,23 +1,13 @@
 // src/microchain/mod.rs
-pub mod store;
 pub mod api;
-pub mod security;
-pub mod integration;
 pub mod challenges;
+pub mod integration;
+pub mod security;
+pub mod store;
 
-pub use security::{SecurityMode, TransactionSignature};
+pub use challenges::{Challenge, ChallengeManager, ChallengeType, ForceExitRequest, StateAnchor};
 pub use integration::{
- SecurityModeStore,
- register_microchain_security,
- validate_microchain_transaction,
- get_security_mode,
- is_key_authorized,
- MicrochainRegistration,
+    get_security_mode, is_key_authorized, register_microchain_security,
+    validate_microchain_transaction, MicrochainRegistration, SecurityModeStore,
 };
-pub use challenges::{
- ChallengeManager,
- StateAnchor,
- Challenge,
- ChallengeType,
- ForceExitRequest,
-};
+pub use security::{SecurityMode, TransactionSignature};

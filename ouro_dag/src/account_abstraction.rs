@@ -1,9 +1,9 @@
 // Account Abstraction (ERC-4337 style)
 // Smart contract wallets with gas sponsorship and social recovery
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
 
 /// User operation (replaces traditional transaction)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,12 +142,14 @@ impl EntryPoint {
     /// Validate user operation
     pub fn validate_user_op(&self, op: &UserOperation) -> Result<(), String> {
         // Get wallet
-        let wallet = self.wallets.get(&op.sender)
-            .ok_or("Wallet not found")?;
+        let wallet = self.wallets.get(&op.sender).ok_or("Wallet not found")?;
 
         // Verify nonce
         if op.nonce != wallet.nonce {
-            return Err(format!("Invalid nonce: expected {}, got {}", wallet.nonce, op.nonce));
+            return Err(format!(
+                "Invalid nonce: expected {}, got {}",
+                wallet.nonce, op.nonce
+            ));
         }
 
         // Verify signature
@@ -157,7 +159,9 @@ impl EntryPoint {
 
         // Verify paymaster if present
         if let Some(ref paymaster_addr) = op.paymaster {
-            let paymaster = self.paymasters.get(paymaster_addr)
+            let paymaster = self
+                .paymasters
+                .get(paymaster_addr)
                 .ok_or("Paymaster not found")?;
 
             let gas_cost = op.call_gas_limit + op.verification_gas_limit + op.pre_verification_gas;
@@ -176,7 +180,9 @@ impl EntryPoint {
         self.validate_user_op(op)?;
 
         // Update nonce (defensive: re-check wallet exists to handle race conditions)
-        let wallet = self.wallets.get_mut(&op.sender)
+        let wallet = self
+            .wallets
+            .get_mut(&op.sender)
             .ok_or_else(|| "Wallet not found during execution".to_string())?;
         wallet.nonce += 1;
 
@@ -185,7 +191,9 @@ impl EntryPoint {
 
         if let Some(ref paymaster_addr) = op.paymaster {
             // Paymaster pays (defensive: re-check paymaster exists)
-            let paymaster = self.paymasters.get_mut(paymaster_addr)
+            let paymaster = self
+                .paymasters
+                .get_mut(paymaster_addr)
                 .ok_or_else(|| "Paymaster not found during execution".to_string())?;
             paymaster.sponsor(gas_cost)?;
         } else {
@@ -210,7 +218,9 @@ impl RecoveryRequest {
     pub fn is_approved(&self, wallet: &SmartWallet) -> bool {
         let required = (wallet.guardians.len() / 2) + 1;
 
-        let approved_count = self.guardian_approvals.iter()
+        let approved_count = self
+            .guardian_approvals
+            .iter()
             .filter(|g| wallet.guardians.contains(g))
             .count();
 

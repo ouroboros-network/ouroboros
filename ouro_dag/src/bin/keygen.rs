@@ -1,8 +1,8 @@
 // Key generation CLI tool for Ouroboros node
 // Generate all cryptographic keys required for node operation
 
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use anyhow::{Result, Context};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -146,18 +146,16 @@ fn generate_tls_cert(output_dir: &str, days: u32) -> Result<()> {
     use rcgen::generate_simple_self_signed;
 
     // Create output directory
-    fs::create_dir_all(output_dir)
-        .context("Failed to create output directory")?;
+    fs::create_dir_all(output_dir).context("Failed to create output directory")?;
 
     // Generate self-signed certificate
     let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-    let cert = generate_simple_self_signed(subject_alt_names)
-        .context("Failed to generate certificate")?;
+    let cert =
+        generate_simple_self_signed(subject_alt_names).context("Failed to generate certificate")?;
 
     // Write certificate
     let cert_path = format!("{}/cert.pem", output_dir);
-    fs::write(&cert_path, cert.serialize_pem()?)
-        .context("Failed to write certificate")?;
+    fs::write(&cert_path, cert.serialize_pem()?).context("Failed to write certificate")?;
 
     // Write private key
     let key_path = format!("{}/key.pem", output_dir);

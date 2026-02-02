@@ -1,9 +1,9 @@
 // Oracle Data Fetchers
 // Implementations for fetching data from all free APIs
 
+use chrono::DateTime;
 use serde::Deserialize;
 use std::collections::HashMap;
-use chrono::DateTime;
 
 /// Fetch result
 pub type FetchResult<T> = Result<T, String>;
@@ -41,16 +41,19 @@ pub async fn fetch_coingecko_price(symbol: &str) -> FetchResult<f64> {
     log::info!("Fetching from CoinGecko: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("CoinGecko request failed: {}", e))?;
 
-    let data: CoinGeckoResponse = response.json()
+    let data: CoinGeckoResponse = response
+        .json()
         .await
         .map_err(|e| format!("CoinGecko JSON parse failed: {}", e))?;
 
-    data.prices.get(symbol.to_lowercase().as_str())
+    data.prices
+        .get(symbol.to_lowercase().as_str())
         .map(|p| p.usd)
         .ok_or_else(|| format!("Price not found for {}", symbol))
 }
@@ -70,16 +73,19 @@ pub async fn fetch_binance_price(symbol: &str) -> FetchResult<f64> {
     log::info!("Fetching from Binance: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Binance request failed: {}", e))?;
 
-    let data: BinanceResponse = response.json()
+    let data: BinanceResponse = response
+        .json()
         .await
         .map_err(|e| format!("Binance JSON parse failed: {}", e))?;
 
-    data.price.parse::<f64>()
+    data.price
+        .parse::<f64>()
         .map_err(|e| format!("Failed to parse Binance price: {}", e))
 }
 
@@ -103,16 +109,20 @@ pub async fn fetch_coinbase_price(symbol: &str) -> FetchResult<f64> {
     log::info!("Fetching from Coinbase: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Coinbase request failed: {}", e))?;
 
-    let data: CoinbaseResponse = response.json()
+    let data: CoinbaseResponse = response
+        .json()
         .await
         .map_err(|e| format!("Coinbase JSON parse failed: {}", e))?;
 
-    data.data.amount.parse::<f64>()
+    data.data
+        .amount
+        .parse::<f64>()
         .map_err(|e| format!("Failed to parse Coinbase price: {}", e))
 }
 
@@ -156,7 +166,8 @@ pub async fn fetch_nba_scores() -> FetchResult<Vec<SportsScore>> {
     log::info!("Fetching NBA scores from: {}", url);
 
     let client = create_client();
-    let response = client.get(url)
+    let response = client
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("NBA API request failed: {}", e))?;
@@ -165,19 +176,22 @@ pub async fn fetch_nba_scores() -> FetchResult<Vec<SportsScore>> {
         return Err(format!("NBA API returned status: {}", response.status()));
     }
 
-    let data: NbaGamesResponse = response.json()
+    let data: NbaGamesResponse = response
+        .json()
         .await
         .map_err(|e| format!("NBA API JSON parse failed: {}", e))?;
 
-    let scores: Vec<SportsScore> = data.data.into_iter().map(|game| {
-        SportsScore {
+    let scores: Vec<SportsScore> = data
+        .data
+        .into_iter()
+        .map(|game| SportsScore {
             home_team: game.home_team.name,
             away_team: game.visitor_team.name,
             home_score: game.home_team_score,
             away_score: game.visitor_team_score,
             status: game.status,
-        }
-    }).collect();
+        })
+        .collect();
 
     Ok(scores)
 }
@@ -222,7 +236,9 @@ pub async fn fetch_football_scores() -> FetchResult<Vec<SportsScore>> {
 }
 
 /// Fetch soccer/football scores with optional API key
-pub async fn fetch_football_scores_with_key(api_key: Option<&str>) -> FetchResult<Vec<SportsScore>> {
+pub async fn fetch_football_scores_with_key(
+    api_key: Option<&str>,
+) -> FetchResult<Vec<SportsScore>> {
     let url = "https://api.football-data.org/v4/matches";
 
     log::info!("Fetching football scores from: {}", url);
@@ -241,22 +257,28 @@ pub async fn fetch_football_scores_with_key(api_key: Option<&str>) -> FetchResul
         .map_err(|e| format!("Football API request failed: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Football API returned status: {} (API key may be required)", response.status()));
+        return Err(format!(
+            "Football API returned status: {} (API key may be required)",
+            response.status()
+        ));
     }
 
-    let data: FootballMatchesResponse = response.json()
+    let data: FootballMatchesResponse = response
+        .json()
         .await
         .map_err(|e| format!("Football API JSON parse failed: {}", e))?;
 
-    let scores: Vec<SportsScore> = data.matches.into_iter().map(|m| {
-        SportsScore {
+    let scores: Vec<SportsScore> = data
+        .matches
+        .into_iter()
+        .map(|m| SportsScore {
             home_team: m.home_team.name,
             away_team: m.away_team.name,
             home_score: m.score.full_time.home.unwrap_or(0),
             away_score: m.score.full_time.away.unwrap_or(0),
             status: m.status,
-        }
-    }).collect();
+        })
+        .collect();
 
     Ok(scores)
 }
@@ -295,12 +317,14 @@ pub async fn fetch_weather_open_meteo(lat: f64, lon: f64) -> FetchResult<Weather
     log::info!("Fetching weather from Open-Meteo: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Open-Meteo request failed: {}", e))?;
 
-    let data: OpenMeteoResponse = response.json()
+    let data: OpenMeteoResponse = response
+        .json()
         .await
         .map_err(|e| format!("Open-Meteo JSON parse failed: {}", e))?;
 
@@ -313,7 +337,8 @@ pub async fn fetch_weather_open_meteo(lat: f64, lon: f64) -> FetchResult<Weather
         80..=82 => "Rain showers",
         95 | 96 | 99 => "Thunderstorm",
         _ => "Unknown",
-    }.to_string();
+    }
+    .to_string();
 
     Ok(WeatherData {
         location: format!("Location: {}, {}", lat, lon),
@@ -351,12 +376,14 @@ pub async fn fetch_weather_owm(city: &str, api_key: &str) -> FetchResult<Weather
     log::info!("Fetching weather from OpenWeatherMap: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("OpenWeatherMap request failed: {}", e))?;
 
-    let data: OpenWeatherMapResponse = response.json()
+    let data: OpenWeatherMapResponse = response
+        .json()
         .await
         .map_err(|e| format!("OpenWeatherMap JSON parse failed: {}", e))?;
 
@@ -364,7 +391,9 @@ pub async fn fetch_weather_owm(city: &str, api_key: &str) -> FetchResult<Weather
         location: data.name,
         temperature_celsius: data.main.temp,
         humidity: data.main.humidity,
-        description: data.weather.get(0)
+        description: data
+            .weather
+            .get(0)
             .map(|w| w.description.clone())
             .unwrap_or_else(|| "Unknown".to_string()),
     })
@@ -400,12 +429,14 @@ pub async fn fetch_hackernews_top() -> FetchResult<Vec<NewsArticle>> {
     let client = create_client();
 
     // Fetch top story IDs
-    let response = client.get(top_url)
+    let response = client
+        .get(top_url)
         .send()
         .await
         .map_err(|e| format!("HN top stories request failed: {}", e))?;
 
-    let story_ids: Vec<u64> = response.json()
+    let story_ids: Vec<u64> = response
+        .json()
         .await
         .map_err(|e| format!("HN top stories JSON parse failed: {}", e))?;
 
@@ -419,11 +450,16 @@ pub async fn fetch_hackernews_top() -> FetchResult<Vec<NewsArticle>> {
                 articles.push(NewsArticle {
                     title: story.title.unwrap_or_else(|| "Untitled".to_string()),
                     source: "Hacker News".to_string(),
-                    url: story.url.unwrap_or_else(|| format!("https://news.ycombinator.com/item?id={}", story.id)),
-                    published_at: story.time
-                        .map(|t| chrono::DateTime::from_timestamp(t, 0)
-                            .map(|dt| dt.to_rfc3339())
-                            .unwrap_or_else(|| "Unknown".to_string()))
+                    url: story.url.unwrap_or_else(|| {
+                        format!("https://news.ycombinator.com/item?id={}", story.id)
+                    }),
+                    published_at: story
+                        .time
+                        .map(|t| {
+                            chrono::DateTime::from_timestamp(t, 0)
+                                .map(|dt| dt.to_rfc3339())
+                                .unwrap_or_else(|| "Unknown".to_string())
+                        })
                         .unwrap_or_else(|| "Unknown".to_string()),
                 });
             }
@@ -467,7 +503,8 @@ pub async fn fetch_reddit_posts(subreddit: &str) -> FetchResult<Vec<NewsArticle>
     log::info!("Fetching from Reddit: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .header("User-Agent", "OuroNetwork/1.0 (Blockchain Oracle)")
         .send()
         .await
@@ -477,21 +514,27 @@ pub async fn fetch_reddit_posts(subreddit: &str) -> FetchResult<Vec<NewsArticle>
         return Err(format!("Reddit returned status: {}", response.status()));
     }
 
-    let data: RedditResponse = response.json()
+    let data: RedditResponse = response
+        .json()
         .await
         .map_err(|e| format!("Reddit JSON parse failed: {}", e))?;
 
-    let articles: Vec<NewsArticle> = data.data.children.into_iter().map(|child| {
-        let post = child.data;
-        NewsArticle {
-            title: post.title,
-            source: format!("Reddit r/{}", subreddit),
-            url: format!("https://reddit.com{}", post.permalink),
-            published_at: chrono::DateTime::from_timestamp(post.created_utc as i64, 0)
-                .map(|dt| dt.to_rfc3339())
-                .unwrap_or_else(|| "Unknown".to_string()),
-        }
-    }).collect();
+    let articles: Vec<NewsArticle> = data
+        .data
+        .children
+        .into_iter()
+        .map(|child| {
+            let post = child.data;
+            NewsArticle {
+                title: post.title,
+                source: format!("Reddit r/{}", subreddit),
+                url: format!("https://reddit.com{}", post.permalink),
+                published_at: chrono::DateTime::from_timestamp(post.created_utc as i64, 0)
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_else(|| "Unknown".to_string()),
+            }
+        })
+        .collect();
 
     if articles.is_empty() {
         return Err(format!("No posts found in r/{}", subreddit));
@@ -538,21 +581,30 @@ pub async fn fetch_wikipedia_article(title: &str) -> FetchResult<WikipediaArticl
     log::info!("Fetching Wikipedia article: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Wikipedia request failed: {}", e))?;
 
-    let data: WikipediaResponse = response.json()
+    let data: WikipediaResponse = response
+        .json()
         .await
         .map_err(|e| format!("Wikipedia JSON parse failed: {}", e))?;
 
-    let page = data.query.pages.values().next()
+    let page = data
+        .query
+        .pages
+        .values()
+        .next()
         .ok_or("No Wikipedia page found")?;
 
     Ok(WikipediaArticle {
         title: page.title.clone(),
-        extract: page.extract.clone().unwrap_or_else(|| "No extract available".to_string()),
+        extract: page
+            .extract
+            .clone()
+            .unwrap_or_else(|| "No extract available".to_string()),
         url: format!("https://en.wikipedia.org/wiki/{}", title.replace(' ', "_")),
         page_views: 0, // Will be fetched separately
     })
@@ -578,16 +630,19 @@ pub async fn fetch_wikipedia_pageviews(title: &str, date: &str) -> FetchResult<u
     log::info!("Fetching Wikipedia pageviews: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Wikipedia pageviews request failed: {}", e))?;
 
-    let data: WikipediaPageviewsResponse = response.json()
+    let data: WikipediaPageviewsResponse = response
+        .json()
         .await
         .map_err(|e| format!("Wikipedia pageviews JSON parse failed: {}", e))?;
 
-    data.items.get(0)
+    data.items
+        .get(0)
         .map(|item| item.views)
         .ok_or("No pageview data found".to_string())
 }
@@ -637,19 +692,26 @@ pub async fn fetch_yahoo_finance(symbol: &str) -> FetchResult<StockQuote> {
     log::info!("Fetching from Yahoo Finance: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Yahoo Finance request failed: {}", e))?;
 
-    let data: YahooFinanceResponse = response.json()
+    let data: YahooFinanceResponse = response
+        .json()
         .await
         .map_err(|e| format!("Yahoo Finance JSON parse failed: {}", e))?;
 
-    let result = data.chart.result.get(0)
+    let result = data
+        .chart
+        .result
+        .get(0)
         .ok_or("No data in Yahoo Finance response")?;
 
-    let price = result.meta.regular_market_price
+    let price = result
+        .meta
+        .regular_market_price
         .ok_or("No price data available")?;
 
     let previous_close = result.meta.chart_previous_close.unwrap_or(price);
@@ -693,7 +755,8 @@ pub async fn fetch_nasa_apod(api_key: &str) -> FetchResult<NasaApod> {
     log::info!("Fetching NASA APOD: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("NASA APOD request failed: {}", e))?;
@@ -702,7 +765,8 @@ pub async fn fetch_nasa_apod(api_key: &str) -> FetchResult<NasaApod> {
         return Err(format!("NASA APOD returned status: {}", response.status()));
     }
 
-    let data: NasaApodResponse = response.json()
+    let data: NasaApodResponse = response
+        .json()
         .await
         .map_err(|e| format!("NASA APOD JSON parse failed: {}", e))?;
 
@@ -734,12 +798,14 @@ pub async fn fetch_random_number(min: i32, max: i32, count: u32) -> FetchResult<
     log::info!("Fetching random numbers from Random.org: {}", url);
 
     let client = create_client();
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Random.org request failed: {}", e))?;
 
-    let text = response.text()
+    let text = response
+        .text()
         .await
         .map_err(|e| format!("Random.org text parse failed: {}", e))?;
 

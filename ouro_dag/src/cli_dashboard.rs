@@ -294,10 +294,7 @@ pub fn print_dashboard(data: &DashboardData) {
         box_chars::TOP_RIGHT
     );
 
-    let title = format!(
-        " OUROBOROS NODE - {} ",
-        data.node_name
-    );
+    let title = format!(" OUROBOROS NODE - {} ", data.node_name);
     let padding = (width - 2 - title.len()) / 2;
     println!(
         "{}{}{}{}{}{}{}{}{}{} {}",
@@ -511,7 +508,7 @@ pub fn print_dashboard(data: &DashboardData) {
             colors::BOLD,
             colors::RESET,
             &addr[..8],
-            &addr[addr.len()-6..],
+            &addr[addr.len() - 6..],
             " ".repeat(3),
             balance_str
         );
@@ -591,10 +588,7 @@ pub fn print_peers(peers: &[PeerInfo]) {
         colors::RESET
     );
     println!("{}", horizontal_line(60));
-    println!(
-        "{:<20} {:<25} {:>10}",
-        "ID", "ADDRESS", "LATENCY"
-    );
+    println!("{:<20} {:<25} {:>10}", "ID", "ADDRESS", "LATENCY");
     println!("{}", horizontal_line(60));
 
     for peer in peers {
@@ -630,7 +624,10 @@ pub fn print_consensus(data: &DashboardData) {
     println!("View:           {}", data.view);
     println!("Leader:         {}", data.leader);
     println!("Role:           {}", data.role);
-    println!("Last Block:     {} (height {})", data.last_block_time, data.last_block_height);
+    println!(
+        "Last Block:     {} (height {})",
+        data.last_block_time, data.last_block_height
+    );
     println!("Highest QC:     {}", data.highest_qc);
     println!();
 }
@@ -669,8 +666,14 @@ pub fn print_resources(data: &DashboardData) {
 
     println!("CPU:    {} {:.1}%", cpu_bar, data.cpu_percent);
     println!("Memory: {} {} MB", mem_bar, data.mem_mb);
-    println!("Disk:   {} {:.1}/{:.1} GB", disk_bar, data.disk_used_gb, data.disk_total_gb);
-    println!("Network: ↓{:.1} KB/s  ↑{:.1} KB/s", data.net_in_kbps, data.net_out_kbps);
+    println!(
+        "Disk:   {} {:.1}/{:.1} GB",
+        disk_bar, data.disk_used_gb, data.disk_total_gb
+    );
+    println!(
+        "Network: ↓{:.1} KB/s  ↑{:.1} KB/s",
+        data.net_in_kbps, data.net_out_kbps
+    );
     println!();
 }
 
@@ -684,13 +687,13 @@ pub fn print_help() {
     );
     println!("{}", horizontal_line(60));
     println!();
-    println!("{}Node Control:{}",colors::BOLD, colors::RESET);
+    println!("{}Node Control:{}", colors::BOLD, colors::RESET);
     println!("  ouro start              Start the node");
     println!("  ouro stop               Stop the node");
     println!("  ouro restart            Restart the node");
     println!("  ouro join --peer <addr> Join network via peer");
     println!();
-    println!("{}Monitoring:{}",colors::BOLD, colors::RESET);
+    println!("{}Monitoring:{}", colors::BOLD, colors::RESET);
     println!("  ouro status             Show dashboard status");
     println!("  ouro status --watch     Live updating dashboard");
     println!("  ouro peers              List connected peers");
@@ -698,17 +701,17 @@ pub fn print_help() {
     println!("  ouro mempool            Show mempool status");
     println!("  ouro resources          Show resource usage");
     println!();
-    println!("{}Logs & Diagnostics:{}",colors::BOLD, colors::RESET);
+    println!("{}Logs & Diagnostics:{}", colors::BOLD, colors::RESET);
     println!("  ouro logs               Tail recent logs");
     println!("  ouro logs --export      Export logs to file");
     println!("  ouro diagnose           Run diagnostic checks");
     println!();
-    println!("{}Wallet:{}",colors::BOLD, colors::RESET);
+    println!("{}Wallet:{}", colors::BOLD, colors::RESET);
     println!("  ouro wallet             Show wallet status");
     println!("  ouro wallet link        Link wallet address");
     println!("  ouro wallet unlink      Unlink wallet");
     println!();
-    println!("{}Admin:{}",colors::BOLD, colors::RESET);
+    println!("{}Admin:{}", colors::BOLD, colors::RESET);
     println!("  ouro resync             Resync from network");
     println!("  ouro backup             Backup database");
     println!("  ouro export-logs        Export full log bundle");

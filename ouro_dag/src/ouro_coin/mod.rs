@@ -1,5 +1,5 @@
+use crate::storage::{get_counter, get_str, iter_prefix, put_counter, put_str};
 use crate::PgPool;
-use crate::storage::{get_str, put_str, get_counter, put_counter, iter_prefix};
 // src/ouro_coin/mod.rs
 // OURO COIN: Native cryptocurrency with 103 million capped supply
 // Purpose: Trading, investment, speculation (like Bitcoin/Ethereum/Monero)
@@ -10,10 +10,12 @@ pub mod economics;
 pub mod fee_processor;
 pub mod integration;
 
-pub use fee_processor::{FeeProcessor, FeeProcessingResult, FeeTransfer, TransferPurpose, AggregatedFees};
-pub use integration::{process_transaction_fee, process_batch_fees, get_total_burned};
+pub use fee_processor::{
+    AggregatedFees, FeeProcessingResult, FeeProcessor, FeeTransfer, TransferPurpose,
+};
+pub use integration::{get_total_burned, process_batch_fees, process_transaction_fee};
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -41,7 +43,7 @@ const GENESIS_KEY: &str = "ouro:genesis_initialized";
 pub struct OuroBalance {
     pub address: String,
     pub balance: u64, // Balance in smallest units
-    pub locked: u64, // Locked for pending transactions
+    pub locked: u64,  // Locked for pending transactions
     pub updated_at: DateTime<Utc>,
 }
 
@@ -89,7 +91,8 @@ impl OuroCoinManager {
     /// - Locked Supply: 90M OURO (held in vesting_address, released over time)
     /// - Total: 103M OURO
     pub async fn initialize_genesis(&self, genesis_address: &str) -> Result<()> {
-        self.initialize_genesis_with_vesting(genesis_address, "ouro_vesting_contract").await
+        self.initialize_genesis_with_vesting(genesis_address, "ouro_vesting_contract")
+            .await
     }
 
     /// Initialize genesis with explicit vesting address
@@ -165,8 +168,16 @@ impl OuroCoinManager {
             .map_err(|e| anyhow!("Failed to initialize vesting nonce: {}", e))?;
 
         log::info!("=== GENESIS INITIALIZED ===");
-        log::info!("Initial Circulating: {} OURO -> {}", INITIAL_CIRCULATING, genesis_address);
-        log::info!("Locked (Vesting):    {} OURO -> {}", LOCKED_SUPPLY, vesting_address);
+        log::info!(
+            "Initial Circulating: {} OURO -> {}",
+            INITIAL_CIRCULATING,
+            genesis_address
+        );
+        log::info!(
+            "Locked (Vesting):    {} OURO -> {}",
+            LOCKED_SUPPLY,
+            vesting_address
+        );
         log::info!("Total Supply:        {} OURO", TOTAL_SUPPLY);
         log::info!("===========================");
 
@@ -225,7 +236,9 @@ impl OuroCoinManager {
         }
 
         // Get sender balance
-        let sender_balance = self.get_balance(from).await?
+        let sender_balance = self
+            .get_balance(from)
+            .await?
             .ok_or_else(|| anyhow!("Sender has no balance"))?;
 
         let total_needed = amount + fee;
@@ -334,13 +347,20 @@ impl OuroCoinManager {
         put_str(self.db(), &balance_key, &new_balance)
             .map_err(|e| anyhow!("Failed to credit balance: {}", e))?;
 
-        log::debug!("Credited {} units to {} (supply: {})", amount, address, current_supply + amount);
+        log::debug!(
+            "Credited {} units to {} (supply: {})",
+            amount,
+            address,
+            current_supply + amount
+        );
         Ok(())
     }
 
     /// Direct balance deduction (used by staking/slashing, no signature required)
     pub async fn debit(&self, address: &str, amount: u64) -> Result<()> {
-        let balance = self.get_balance(address).await?
+        let balance = self
+            .get_balance(address)
+            .await?
             .ok_or_else(|| anyhow!("Address has no balance"))?;
 
         if balance.balance < amount {

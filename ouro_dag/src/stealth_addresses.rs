@@ -1,14 +1,10 @@
 // Stealth addresses for recipient privacy
 // One-time addresses that only recipient can detect
 
-use curve25519_dalek::{
-    edwards::EdwardsPoint,
-    scalar::Scalar,
-    constants::ED25519_BASEPOINT_TABLE,
-};
-use sha2::{Sha512, Digest};
-use serde::{Serialize, Deserialize};
+use curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE, edwards::EdwardsPoint, scalar::Scalar};
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha512};
 
 /// Stealth address data included in transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,12 +38,18 @@ pub fn generate_stealth_address(
 
     // Parse recipient keys
     let view_pub = decompress_point(
-        recipient_view_pubkey.try_into().map_err(|_| "Invalid view key".to_string())?
-    ).ok_or("Invalid view key point".to_string())?;
+        recipient_view_pubkey
+            .try_into()
+            .map_err(|_| "Invalid view key".to_string())?,
+    )
+    .ok_or("Invalid view key point".to_string())?;
 
     let spend_pub = decompress_point(
-        recipient_spend_pubkey.try_into().map_err(|_| "Invalid spend key".to_string())?
-    ).ok_or("Invalid spend key point".to_string())?;
+        recipient_spend_pubkey
+            .try_into()
+            .map_err(|_| "Invalid spend key".to_string())?,
+    )
+    .ok_or("Invalid spend key point".to_string())?;
 
     // Generate random ephemeral key
     let mut r_bytes = [0u8; 32];
@@ -78,18 +80,27 @@ pub fn scan_stealth_address(
 ) -> Result<Option<Vec<u8>>, String> {
     // Parse ephemeral public key
     let ephemeral_pub = decompress_point(
-        stealth_data.ephemeral_pubkey.as_slice().try_into()
-            .map_err(|_| "Invalid ephemeral key".to_string())?
-    ).ok_or("Invalid ephemeral point".to_string())?;
+        stealth_data
+            .ephemeral_pubkey
+            .as_slice()
+            .try_into()
+            .map_err(|_| "Invalid ephemeral key".to_string())?,
+    )
+    .ok_or("Invalid ephemeral point".to_string())?;
 
     // Parse our spend public key
     let spend_pub = decompress_point(
-        spend_pubkey.try_into().map_err(|_| "Invalid spend key".to_string())?
-    ).ok_or("Invalid spend point".to_string())?;
+        spend_pubkey
+            .try_into()
+            .map_err(|_| "Invalid spend key".to_string())?,
+    )
+    .ok_or("Invalid spend point".to_string())?;
 
     // Parse view secret
     let v = Scalar::from_bytes_mod_order(
-        view_secret.try_into().map_err(|_| "Invalid view secret".to_string())?
+        view_secret
+            .try_into()
+            .map_err(|_| "Invalid view secret".to_string())?,
     );
 
     // Compute shared secret: v * R (where R is ephemeral pubkey)
@@ -103,9 +114,13 @@ pub fn scan_stealth_address(
 
     // Parse actual one-time address from transaction
     let actual_address = decompress_point(
-        stealth_data.one_time_address.as_slice().try_into()
-            .map_err(|_| "Invalid address".to_string())?
-    ).ok_or("Invalid address point".to_string())?;
+        stealth_data
+            .one_time_address
+            .as_slice()
+            .try_into()
+            .map_err(|_| "Invalid address".to_string())?,
+    )
+    .ok_or("Invalid address point".to_string())?;
 
     // Check if they match
     if expected_address == actual_address {
@@ -123,10 +138,14 @@ pub fn derive_one_time_privkey(
     spend_secret: &[u8],
 ) -> Result<Vec<u8>, String> {
     let hs = Scalar::from_bytes_mod_order(
-        shared_secret_hash.try_into().map_err(|_| "Invalid hash".to_string())?
+        shared_secret_hash
+            .try_into()
+            .map_err(|_| "Invalid hash".to_string())?,
     );
     let b = Scalar::from_bytes_mod_order(
-        spend_secret.try_into().map_err(|_| "Invalid spend key".to_string())?
+        spend_secret
+            .try_into()
+            .map_err(|_| "Invalid spend key".to_string())?,
     );
 
     // x' = H(r*V) + b
@@ -168,9 +187,7 @@ fn hash_to_scalar(point: &EdwardsPoint) -> Scalar {
     hasher.update(point.compress().as_bytes());
     let hash = hasher.finalize();
 
-    Scalar::from_bytes_mod_order(
-        hash[0..32].try_into().unwrap()
-    )
+    Scalar::from_bytes_mod_order(hash[0..32].try_into().unwrap())
 }
 
 /// Decompress point
@@ -196,20 +213,15 @@ mod tests {
         let stealth = generate_stealth_address(&view_pub, &spend_pub).unwrap();
 
         // Recipient scans and detects it's for them
-        let result = scan_stealth_address(
-            &stealth,
-            &view_key.secret.to_bytes(),
-            &spend_pub,
-        ).unwrap();
+        let result =
+            scan_stealth_address(&stealth, &view_key.secret.to_bytes(), &spend_pub).unwrap();
 
         assert!(result.is_some(), "Recipient should detect stealth address");
 
         // Derive one-time private key for spending
         let one_time_hash = result.unwrap();
-        let one_time_key = derive_one_time_privkey(
-            &one_time_hash,
-            &spend_key.secret.to_bytes(),
-        ).unwrap();
+        let one_time_key =
+            derive_one_time_privkey(&one_time_hash, &spend_key.secret.to_bytes()).unwrap();
 
         assert!(!one_time_key.is_empty());
     }
@@ -227,11 +239,8 @@ mod tests {
         let stealth = generate_stealth_address(&view_pub, &spend_pub).unwrap();
 
         // Recipient 2 scans (should not detect)
-        let result = scan_stealth_address(
-            &stealth,
-            &view_key2.secret.to_bytes(),
-            &spend_pub,
-        ).unwrap();
+        let result =
+            scan_stealth_address(&stealth, &view_key2.secret.to_bytes(), &spend_pub).unwrap();
 
         assert!(result.is_none(), "Wrong recipient should not detect");
     }
