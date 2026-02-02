@@ -418,28 +418,6 @@ pub fn print_dashboard(data: &DashboardData) {
         data.tps_5m
     );
 
-    // Top peers
-    if !data.top_peers.is_empty() {
-        for peer in data.top_peers.iter().take(3) {
-            let latency_color = if peer.latency_ms < 50 {
-                colors::GREEN
-            } else if peer.latency_ms < 200 {
-                colors::YELLOW
-            } else {
-                colors::RED
-            };
-            println!(
-                "{}   {} {:<20} {}{}ms{}",
-                box_chars::VERTICAL,
-                peer.id,
-                peer.addr,
-                latency_color,
-                peer.latency_ms,
-                colors::RESET
-            );
-        }
-    }
-
     // Resources section
     println!(
         "{}{}{}",

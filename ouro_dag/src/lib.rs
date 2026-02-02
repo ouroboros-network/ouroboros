@@ -584,11 +584,11 @@ enum Commands {
         #[arg(long)]
         rocksdb_path: Option<String>,
     },
-    /// Show node status dashboard
+    /// Show node status dashboard (live updating by default)
     Status {
-        /// Watch mode - continuously update the dashboard
-        #[arg(long, short)]
-        watch: bool,
+        /// Run once and exit (instead of live updating)
+        #[arg(long)]
+        once: bool,
         /// API endpoint to query (default: http://localhost:8000)
         #[arg(long, default_value = "http://localhost:8000")]
         api: String,
@@ -1644,8 +1644,8 @@ pub async fn run() -> std::io::Result<()> {
         }
 
         // ==================== CLI DASHBOARD COMMANDS ====================
-        Commands::Status { watch, api } => {
-            handle_status_command(*watch, api).await?;
+        Commands::Status { once, api } => {
+            handle_status_command(!*once, api).await?;
         }
 
         Commands::Peers { api } => {
