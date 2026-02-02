@@ -279,12 +279,20 @@ pub fn horizontal_line(width: usize) -> String {
 pub fn print_dashboard(data: &DashboardData) {
     let width = 70;
 
-    // Enable ANSI support on Windows
-    enable_ansi_support();
-
-    // Clear screen and move cursor to top
-    print!("\x1b[2J\x1b[H");
-    let _ = io::stdout().flush();
+    // Clear screen - use platform-specific method
+    #[cfg(windows)]
+    {
+        // Use cls command on Windows for reliable clearing
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "cls"])
+            .status();
+    }
+    #[cfg(not(windows))]
+    {
+        // Use ANSI escape codes on Unix
+        print!("\x1b[2J\x1b[H");
+        let _ = io::stdout().flush();
+    }
 
     // Header
     println!(
