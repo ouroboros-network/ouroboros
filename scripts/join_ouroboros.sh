@@ -57,7 +57,7 @@ mkdir -p "$NODE_DIR" "$DATA_DIR"
 echo "[1/4] Downloading Ouroboros node..."
 DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/latest/download/$BINARY_NAME"
 
-if curl -sL "$DOWNLOAD_URL" -o "$NODE_DIR/ouro-bin" 2>/dev/null; then
+if curl -fsSL "$DOWNLOAD_URL" -o "$NODE_DIR/ouro-bin" 2>/dev/null && [ -s "$NODE_DIR/ouro-bin" ]; then
     chmod +x "$NODE_DIR/ouro-bin"
     echo "      Binary downloaded successfully"
 else
