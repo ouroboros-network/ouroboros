@@ -96,11 +96,11 @@ fi
 
 # Configure node
 echo "[2/4] Configuring node..."
-SEED_NODE="${OUROBOROS_SEED:-seed.ouroboros.network:9001}"
+SEED_NODE="${OUROBOROS_SEED:-136.112.101.176:9001}"
 
 cat > "$NODE_DIR/.env" <<EOF
 DATABASE_PATH=$DATA_DIR
-API_ADDRESS=0.0.0.0:8001
+API_ADDRESS=0.0.0.0:8000
 P2P_ADDRESS=0.0.0.0:9001
 RUST_LOG=info
 EOF
@@ -123,7 +123,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$NODE_DIR
 Environment="DATABASE_PATH=$DATA_DIR"
-Environment="API_ADDRESS=0.0.0.0:8001"
+Environment="API_ADDRESS=0.0.0.0:8000"
 Environment="P2P_ADDRESS=0.0.0.0:9001"
 ExecStart=$NODE_DIR/ouro join --peer $SEED_NODE --storage rocksdb --rocksdb-path $DATA_DIR
 Restart=always
@@ -185,15 +185,30 @@ fi
 
 # Add ouro to PATH
 echo "[4/4] Setting up CLI..."
+# Try multiple locations for PATH
+if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
+    ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
+elif command -v sudo &> /dev/null; then
+    sudo ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
+fi
 if [ -d "$HOME/.local/bin" ]; then
+    mkdir -p "$HOME/.local/bin"
     ln -sf "$NODE_DIR/ouro" "$HOME/.local/bin/ouro" 2>/dev/null || true
 fi
+# Add to shell profile if not already there
+if ! grep -q "\.ouroboros" "$HOME/.bashrc" 2>/dev/null; then
+    echo 'export PATH="$HOME/.ouroboros:$PATH"' >> "$HOME/.bashrc"
+fi
+if ! grep -q "\.ouroboros" "$HOME/.zshrc" 2>/dev/null; then
+    echo 'export PATH="$HOME/.ouroboros:$PATH"' >> "$HOME/.zshrc" 2>/dev/null || true
+fi
+export PATH="$NODE_DIR:$PATH"
 
 # Create helper script
 cat > "$NODE_DIR/start.sh" <<EOF
 #!/bin/bash
 export DATABASE_PATH=$DATA_DIR
-export API_ADDRESS=0.0.0.0:8001
+export API_ADDRESS=0.0.0.0:8000
 export P2P_ADDRESS=0.0.0.0:9001
 $NODE_DIR/ouro join --peer $SEED_NODE --storage rocksdb --rocksdb-path $DATA_DIR
 EOF
@@ -217,12 +232,12 @@ fi
 
 # Check status
 echo ""
-if curl -sf http://localhost:8001/health >/dev/null 2>&1; then
+if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
     echo "=========================================="
     echo "  Node started successfully!"
     echo "=========================================="
     echo ""
-    echo "API: http://localhost:8001"
+    echo "API: http://localhost:8000"
     echo "Data: $DATA_DIR"
     echo ""
     echo "CLI Commands:"

@@ -72,7 +72,7 @@ try {
 Write-Host ""
 
 # Get seed node address
-$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "seed.ouroboros.network:9001" }
+$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9001" }
 
 Write-Host "Configuration:" -ForegroundColor Yellow
 Write-Host "   Storage: RocksDB (lightweight, no database needed)" -ForegroundColor Gray
@@ -85,10 +85,10 @@ New-Item -ItemType Directory -Force -Path "$installDir\data" | Out-Null
 
 # Set environment variables
 [Environment]::SetEnvironmentVariable("DATABASE_PATH", "$installDir\data", "User")
-[Environment]::SetEnvironmentVariable("API_ADDRESS", "0.0.0.0:8001", "User")
+[Environment]::SetEnvironmentVariable("API_ADDRESS", "0.0.0.0:8000", "User")
 [Environment]::SetEnvironmentVariable("P2P_ADDRESS", "0.0.0.0:9001", "User")
 $env:DATABASE_PATH = "$installDir\data"
-$env:API_ADDRESS = "0.0.0.0:8001"
+$env:API_ADDRESS = "0.0.0.0:8000"
 $env:P2P_ADDRESS = "0.0.0.0:9001"
 
 # Create batch file for easy management
@@ -96,7 +96,7 @@ $batchContent = @"
 @echo off
 cd /d "$installDir"
 set DATABASE_PATH=$installDir\data
-set API_ADDRESS=0.0.0.0:8001
+set API_ADDRESS=0.0.0.0:8000
 set P2P_ADDRESS=0.0.0.0:9001
 ouro.exe join --peer $seedNode --storage rocksdb --rocksdb-path "$installDir\data"
 "@
@@ -114,12 +114,16 @@ Write-Host "Starting Ouroboros node..." -ForegroundColor Yellow
 
 # Start the node in background
 $processArgs = "join --peer $seedNode --storage rocksdb --rocksdb-path `"$installDir\data`""
-Start-Process -FilePath $outputPath -ArgumentList $processArgs -WindowStyle Hidden -RedirectStandardOutput "$installDir\node.log" -RedirectStandardError "$installDir\node_error.log"
 
-Start-Sleep -Seconds 3
+# Start process and capture it
+$nodeProcess = Start-Process -FilePath $outputPath -ArgumentList $processArgs -PassThru -WindowStyle Hidden -RedirectStandardOutput "$installDir\node.log" -RedirectStandardError "$installDir\node_error.log"
 
-# Check if running
-$process = Get-Process ouro -ErrorAction SilentlyContinue
+Write-Host "   Node started with PID: $($nodeProcess.Id)" -ForegroundColor Gray
+
+Start-Sleep -Seconds 5
+
+# Check if still running
+$process = Get-Process -Id $nodeProcess.Id -ErrorAction SilentlyContinue
 if ($process) {
     Write-Host ""
     Write-Host "==========================================" -ForegroundColor Green
@@ -145,8 +149,21 @@ if ($process) {
     Write-Host "==========================================" -ForegroundColor Green
 } else {
     Write-Host ""
-    Write-Host "Error: Node failed to start" -ForegroundColor Red
-    Write-Host "Check logs: Get-Content $installDir\node.log -Tail 50" -ForegroundColor Yellow
-    Write-Host "Check errors: Get-Content $installDir\node_error.log -Tail 50" -ForegroundColor Yellow
+    Write-Host "Error: Node stopped unexpectedly" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "=== Error Log ===" -ForegroundColor Yellow
+    if (Test-Path "$installDir\node_error.log") {
+        Get-Content "$installDir\node_error.log" -Tail 20
+    }
+    Write-Host ""
+    Write-Host "=== Output Log ===" -ForegroundColor Yellow
+    if (Test-Path "$installDir\node.log") {
+        Get-Content "$installDir\node.log" -Tail 20
+    }
+    Write-Host ""
+    Write-Host "To run manually: $installDir\ouro.exe join --peer $seedNode --storage rocksdb --rocksdb-path `"$installDir\data`"" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Press any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }
