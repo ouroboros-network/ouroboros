@@ -1554,7 +1554,17 @@ pub async fn run() -> std::io::Result<()> {
 // ==================== CLI COMMAND HANDLERS ====================
 
 async fn fetch_api<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
-    let response = reqwest::get(url).await.map_err(|e| format!("Failed to connect: {}", e))?;
+    let client = reqwest::Client::new();
+    let mut request = client.get(url);
+
+    // Add API key authentication if available
+    if let Ok(api_keys) = std::env::var("API_KEYS") {
+        if let Some(key) = api_keys.split(',').next().filter(|k| !k.trim().is_empty()) {
+            request = request.header("Authorization", format!("Bearer {}", key.trim()));
+        }
+    }
+
+    let response = request.send().await.map_err(|e| format!("Failed to connect: {}", e))?;
     if !response.status().is_success() {
         return Err(format!("API returned error: {}", response.status()));
     }
