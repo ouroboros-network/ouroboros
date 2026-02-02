@@ -146,9 +146,7 @@ Write-Host "[4/4] Creating helper scripts..." -ForegroundColor Yellow
 @"
 @echo off
 cd /d "$installDir"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
-    echo %%a | findstr /r "^#" >nul || set "%%a=%%b"
-)
+for /f "usebackq eol=# tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 ouro-bin.exe start
 "@ | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
 
@@ -156,9 +154,7 @@ ouro-bin.exe start
 @"
 @echo off
 cd /d "$installDir"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
-    echo %%a | findstr /r "^#" >nul || set "%%a=%%b"
-)
+for /f "usebackq eol=# tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 ouro-bin.exe status
 "@ | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
 
@@ -178,9 +174,7 @@ if %ERRORLEVEL% EQU 0 (
 @"
 @echo off
 cd /d "$installDir"
-for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
-    echo %%a | findstr /r "^#" >nul || set "%%a=%%b"
-)
+for /f "usebackq eol=# tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 "$installDir\ouro-bin.exe" %*
 "@ | Out-File -FilePath "$installDir\ouro.bat" -Encoding ASCII
 
