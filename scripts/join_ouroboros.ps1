@@ -33,7 +33,10 @@ $outputPath = "$installDir\ouro-bin.exe"
 
 try {
     Write-Host "   Downloading from GitHub releases..." -ForegroundColor Gray
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
+    if (-not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -lt 1000000) {
+        throw "Download incomplete or file too small"
+    }
     Write-Host "Binary downloaded successfully" -ForegroundColor Green
 } catch {
     Write-Host "Download failed - building from source..." -ForegroundColor Yellow
