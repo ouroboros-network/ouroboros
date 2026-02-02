@@ -108,6 +108,9 @@ else
     echo "      Generated new node identity: $NODE_ID"
 fi
 
+# Generate API key for local access
+API_KEY=$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\n')
+
 cat > "$NODE_DIR/.env" <<EOF
 DATABASE_PATH=$DATA_DIR
 API_ADDRESS=0.0.0.0:8000
@@ -117,6 +120,7 @@ LISTEN_ADDR=0.0.0.0:9000
 PEER_ADDRS=$SEED_NODE
 BFT_SECRET_SEED=${BFT_SECRET_SEED}
 NODE_ID=${NODE_ID:-node-$(openssl rand -hex 4 2>/dev/null || echo "default")}
+API_KEYS=${API_KEY}
 RUST_LOG=info
 EOF
 
@@ -198,24 +202,37 @@ fi
 
 # Add ouro to PATH
 echo "[4/4] Setting up CLI..."
-# Try multiple locations for PATH
+
+# Create wrapper script that loads environment
+cat > "$NODE_DIR/ouro-cli" <<'WRAPPER'
+#!/bin/bash
+OURO_DIR="$HOME/.ouroboros"
+if [ -f "$OURO_DIR/.env" ]; then
+    set -a
+    source "$OURO_DIR/.env"
+    set +a
+fi
+exec "$OURO_DIR/ouro" "$@"
+WRAPPER
+chmod +x "$NODE_DIR/ouro-cli"
+
+# Create symlinks
 if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
-    ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
+    ln -sf "$NODE_DIR/ouro-cli" "/usr/local/bin/ouro" 2>/dev/null || true
 elif command -v sudo &> /dev/null; then
-    sudo ln -sf "$NODE_DIR/ouro" "/usr/local/bin/ouro" 2>/dev/null || true
+    sudo ln -sf "$NODE_DIR/ouro-cli" "/usr/local/bin/ouro" 2>/dev/null || true
 fi
-if [ -d "$HOME/.local/bin" ]; then
-    mkdir -p "$HOME/.local/bin"
-    ln -sf "$NODE_DIR/ouro" "$HOME/.local/bin/ouro" 2>/dev/null || true
-fi
+mkdir -p "$HOME/.local/bin"
+ln -sf "$NODE_DIR/ouro-cli" "$HOME/.local/bin/ouro" 2>/dev/null || true
+
 # Add to shell profile if not already there
 if ! grep -q "\.ouroboros" "$HOME/.bashrc" 2>/dev/null; then
-    echo 'export PATH="$HOME/.ouroboros:$PATH"' >> "$HOME/.bashrc"
+    echo 'export PATH="$HOME/.ouroboros:$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
 fi
 if ! grep -q "\.ouroboros" "$HOME/.zshrc" 2>/dev/null; then
-    echo 'export PATH="$HOME/.ouroboros:$PATH"' >> "$HOME/.zshrc" 2>/dev/null || true
+    echo 'export PATH="$HOME/.ouroboros:$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc" 2>/dev/null || true
 fi
-export PATH="$NODE_DIR:$PATH"
+export PATH="$NODE_DIR:$HOME/.local/bin:$PATH"
 
 # Create helper script
 cat > "$NODE_DIR/start.sh" <<EOF

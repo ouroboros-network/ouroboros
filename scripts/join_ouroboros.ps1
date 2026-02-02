@@ -90,6 +90,7 @@ if (Test-Path $envFile) {
     # Generate random secrets
     $bftSecret = -join ((1..64) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
     $nodeId = "node-" + -join ((1..8) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
+    $apiKey = -join ((1..32) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
     Write-Host "   Generated new node identity: $nodeId" -ForegroundColor Gray
 
     # Save to .env file
@@ -102,6 +103,7 @@ LISTEN_ADDR=0.0.0.0:9000
 PEER_ADDRS=$seedNode
 BFT_SECRET_SEED=$bftSecret
 NODE_ID=$nodeId
+API_KEYS=$apiKey
 RUST_LOG=info
 "@ | Out-File -FilePath $envFile -Encoding ASCII
 }
@@ -126,7 +128,7 @@ Write-Host ""
 $batchContent = @"
 @echo off
 cd /d "$installDir"
-for /f "tokens=*" %%a in (.env) do set %%a
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 ouro.exe start
 "@
 $batchContent | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
@@ -135,10 +137,24 @@ $batchContent | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
 $statusContent = @"
 @echo off
 cd /d "$installDir"
-for /f "tokens=*" %%a in (.env) do set %%a
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 ouro.exe status
 "@
 $statusContent | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
+
+# Create wrapper PowerShell script for ouro command
+$wrapperContent = @'
+$envFile = "$env:USERPROFILE\.ouroboros\.env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match "^([^=]+)=(.*)$") {
+            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+        }
+    }
+}
+& "$env:USERPROFILE\.ouroboros\ouro.exe" $args
+'@
+$wrapperContent | Out-File -FilePath "$installDir\ouro-cli.ps1" -Encoding UTF8
 
 Write-Host "Starting Ouroboros node..." -ForegroundColor Yellow
 
