@@ -576,6 +576,57 @@ pub async fn start_network(
     // Save peers AFTER releasing the lock to avoid deadlock
     let _ = save_peers_to_file(&peer_store).await;
 
+    // --- ORGANIC GROWTH: Enable DHT for automatic peer discovery ---
+    let bootstrap_peers: Vec<String> = {
+        let mut peers = Vec::new();
+        // Collect from BOOTSTRAP_PEERS env
+        if let Ok(peers_str) = std::env::var("BOOTSTRAP_PEERS") {
+            peers.extend(
+                peers_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()),
+            );
+        }
+        // Collect from PEER_ADDRS env
+        if let Ok(peers_str) = std::env::var("PEER_ADDRS") {
+            peers.extend(
+                peers_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()),
+            );
+        }
+        peers
+    };
+
+    let dht_manager = match dht_integration::init_dht(listen_addr, peer_store.clone(), &bootstrap_peers).await {
+        Ok(mgr) => {
+            tracing::info!("DHT initialized for organic peer discovery");
+            Some(mgr)
+        }
+        Err(e) => {
+            tracing::warn!("DHT initialization failed (continuing without): {}", e);
+            None
+        }
+    };
+
+    // Spawn DHT refresh loop if initialized
+    if let Some(ref dht) = dht_manager {
+        let dht_clone = dht.clone();
+        let shutdown_rx = shutdown_tx.subscribe();
+        tokio::spawn(async move {
+            let mut shutdown_rx = shutdown_rx;
+            tokio::select! {
+                _ = dht_clone.refresh_loop() => {}
+                _ = shutdown_rx.recv() => {
+                    tracing::info!("DHT refresh loop shutting down");
+                }
+            }
+        });
+    }
+    // ------------------------------------------------------------------
+
     // dedupe cache (msgid -> expiry Instant)
     let dedupe: DedupeCache = Arc::new(Mutex::new(HashMap::new()));
     {
@@ -611,6 +662,7 @@ pub async fn start_network(
     let inbound_clone = inbound_tx.clone();
     let peer_store_for_listener = peer_store.clone();
     let dedupe_for_listener = dedupe.clone();
+    let dht_for_listener = dht_manager.clone();
     let mut shutdown_rx_for_listener = shutdown_tx.subscribe();
     tokio::spawn(async move {
         let listener = match TcpListener::bind(&listen_addr_str).await {
@@ -638,6 +690,7 @@ pub async fn start_network(
             let ps = peer_store_for_listener.clone();
             let dedupe_clone = dedupe_for_listener.clone();
             let tls_acceptor_clone = tls_acceptor.clone();
+            let dht_clone = dht_for_listener.clone();
             tokio::spawn(async move {
                 // Handle connection with TLS if configured
                 if let Some(acceptor) = tls_acceptor_clone {
@@ -645,6 +698,13 @@ pub async fn start_network(
                     match acceptor.accept(stream).await {
                         Ok(tls_stream) => {
                             tracing::info!("TLS handshake successful from {}", peer_addr);
+
+                            // Sync peer to DHT for organic discovery
+                            if let Some(ref dht) = dht_clone {
+                                let peer_entry = PeerEntry::new(peer_addr.to_string());
+                                dht.sync_peer_to_dht(&peer_entry).await;
+                            }
+
                             handle_inbound_connection_generic(
                                 tls_stream,
                                 peer_addr,
@@ -660,6 +720,13 @@ pub async fn start_network(
                 } else {
                     // Plain TCP connection (development/testing only - NOT RECOMMENDED FOR PRODUCTION)
                     tracing::debug!("Plain TCP connection from {} (TLS not configured)", peer_addr);
+
+                    // Sync peer to DHT for organic discovery
+                    if let Some(ref dht) = dht_clone {
+                        let peer_entry = PeerEntry::new(peer_addr.to_string());
+                        dht.sync_peer_to_dht(&peer_entry).await;
+                    }
+
                     handle_inbound_connection_generic(
                         stream,
                         peer_addr,
