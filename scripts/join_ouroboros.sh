@@ -98,10 +98,25 @@ fi
 echo "[2/4] Configuring node..."
 SEED_NODE="${OUROBOROS_SEED:-136.112.101.176:9001}"
 
+# Generate BFT secret seed if not exists
+if [ -f "$NODE_DIR/.env" ] && grep -q "BFT_SECRET_SEED" "$NODE_DIR/.env"; then
+    echo "      Using existing configuration"
+    source "$NODE_DIR/.env"
+else
+    BFT_SECRET_SEED=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
+    NODE_ID="node-$(openssl rand -hex 4 2>/dev/null || head -c 8 /dev/urandom | xxd -p | tr -d '\n')"
+    echo "      Generated new node identity: $NODE_ID"
+fi
+
 cat > "$NODE_DIR/.env" <<EOF
 DATABASE_PATH=$DATA_DIR
 API_ADDRESS=0.0.0.0:8000
+API_ADDR=0.0.0.0:8000
 P2P_ADDRESS=0.0.0.0:9001
+LISTEN_ADDR=0.0.0.0:9000
+PEER_ADDRS=$SEED_NODE
+BFT_SECRET_SEED=${BFT_SECRET_SEED}
+NODE_ID=${NODE_ID:-node-$(openssl rand -hex 4 2>/dev/null || echo "default")}
 RUST_LOG=info
 EOF
 
@@ -122,10 +137,8 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$NODE_DIR
-Environment="DATABASE_PATH=$DATA_DIR"
-Environment="API_ADDRESS=0.0.0.0:8000"
-Environment="P2P_ADDRESS=0.0.0.0:9001"
-ExecStart=$NODE_DIR/ouro join --peer $SEED_NODE --storage rocksdb --rocksdb-path $DATA_DIR
+EnvironmentFile=$NODE_DIR/.env
+ExecStart=$NODE_DIR/ouro start
 Restart=always
 RestartSec=10
 
@@ -207,10 +220,10 @@ export PATH="$NODE_DIR:$PATH"
 # Create helper script
 cat > "$NODE_DIR/start.sh" <<EOF
 #!/bin/bash
-export DATABASE_PATH=$DATA_DIR
-export API_ADDRESS=0.0.0.0:8000
-export P2P_ADDRESS=0.0.0.0:9001
-$NODE_DIR/ouro join --peer $SEED_NODE --storage rocksdb --rocksdb-path $DATA_DIR
+set -a
+source $NODE_DIR/.env
+set +a
+$NODE_DIR/ouro start
 EOF
 chmod +x "$NODE_DIR/start.sh"
 

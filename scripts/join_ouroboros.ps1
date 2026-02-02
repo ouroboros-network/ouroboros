@@ -74,31 +74,60 @@ Write-Host ""
 # Get seed node address
 $seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9001" }
 
+# Create data directory
+New-Item -ItemType Directory -Force -Path "$installDir\data" | Out-Null
+
+# Generate or load BFT secret seed
+$envFile = "$installDir\.env"
+if (Test-Path $envFile) {
+    Write-Host "   Using existing configuration" -ForegroundColor Gray
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match "^([^=]+)=(.*)$") {
+            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+        }
+    }
+} else {
+    # Generate random secrets
+    $bftSecret = -join ((1..64) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
+    $nodeId = "node-" + -join ((1..8) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
+    Write-Host "   Generated new node identity: $nodeId" -ForegroundColor Gray
+
+    # Save to .env file
+    @"
+DATABASE_PATH=$installDir\data
+API_ADDRESS=0.0.0.0:8000
+API_ADDR=0.0.0.0:8000
+P2P_ADDRESS=0.0.0.0:9001
+LISTEN_ADDR=0.0.0.0:9000
+PEER_ADDRS=$seedNode
+BFT_SECRET_SEED=$bftSecret
+NODE_ID=$nodeId
+RUST_LOG=info
+"@ | Out-File -FilePath $envFile -Encoding ASCII
+}
+
+# Load environment from .env
+Get-Content $envFile | ForEach-Object {
+    if ($_ -match "^([^=]+)=(.*)$") {
+        $name = $matches[1]
+        $value = $matches[2]
+        [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        [Environment]::SetEnvironmentVariable($name, $value, "User")
+    }
+}
+
 Write-Host "Configuration:" -ForegroundColor Yellow
 Write-Host "   Storage: RocksDB (lightweight, no database needed)" -ForegroundColor Gray
 Write-Host "   Data directory: $installDir\data" -ForegroundColor Gray
 Write-Host "   Seed node: $seedNode" -ForegroundColor Gray
 Write-Host ""
 
-# Create data directory
-New-Item -ItemType Directory -Force -Path "$installDir\data" | Out-Null
-
-# Set environment variables
-[Environment]::SetEnvironmentVariable("DATABASE_PATH", "$installDir\data", "User")
-[Environment]::SetEnvironmentVariable("API_ADDRESS", "0.0.0.0:8000", "User")
-[Environment]::SetEnvironmentVariable("P2P_ADDRESS", "0.0.0.0:9001", "User")
-$env:DATABASE_PATH = "$installDir\data"
-$env:API_ADDRESS = "0.0.0.0:8000"
-$env:P2P_ADDRESS = "0.0.0.0:9001"
-
 # Create batch file for easy management
 $batchContent = @"
 @echo off
 cd /d "$installDir"
-set DATABASE_PATH=$installDir\data
-set API_ADDRESS=0.0.0.0:8000
-set P2P_ADDRESS=0.0.0.0:9001
-ouro.exe join --peer $seedNode --storage rocksdb --rocksdb-path "$installDir\data"
+for /f "tokens=*" %%a in (.env) do set %%a
+ouro.exe start
 "@
 $batchContent | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
 
@@ -106,6 +135,7 @@ $batchContent | Out-File -FilePath "$installDir\start-node.bat" -Encoding ASCII
 $statusContent = @"
 @echo off
 cd /d "$installDir"
+for /f "tokens=*" %%a in (.env) do set %%a
 ouro.exe status
 "@
 $statusContent | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
@@ -113,7 +143,7 @@ $statusContent | Out-File -FilePath "$installDir\status.bat" -Encoding ASCII
 Write-Host "Starting Ouroboros node..." -ForegroundColor Yellow
 
 # Start the node in background
-$processArgs = "join --peer $seedNode --storage rocksdb --rocksdb-path `"$installDir\data`""
+$processArgs = "start"
 
 # Start process and capture it
 $nodeProcess = Start-Process -FilePath $outputPath -ArgumentList $processArgs -PassThru -WindowStyle Hidden -RedirectStandardOutput "$installDir\node.log" -RedirectStandardError "$installDir\node_error.log"
