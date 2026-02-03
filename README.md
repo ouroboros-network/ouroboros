@@ -22,8 +22,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ouroboros-network/ouroboros/
 Invoke-WebRequest https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.ps1 | Invoke-Expression
 ```
 
-**Option 2: Command Prompt (if PowerShell has restrictions)**
+**Option 2: Batch file (if PowerShell has issues)**
 
+In PowerShell:
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.bat -OutFile $env:TEMP\join.bat; & $env:TEMP\join.bat
+```
+
+Or in Command Prompt (cmd.exe):
 ```cmd
 curl -L -o %TEMP%\join.bat https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.bat && %TEMP%\join.bat
 ```
