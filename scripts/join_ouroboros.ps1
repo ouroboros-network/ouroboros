@@ -32,11 +32,14 @@ $outputPath = "$installDir\ouro-bin.exe"
 
 try {
     Write-Host "      Downloading from GitHub releases..." -ForegroundColor Gray
-    # Force TLS 1.2 for GitHub
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    # Use WebClient for more reliable downloads with redirects
-    $webClient = New-Object System.Net.WebClient
-    $webClient.DownloadFile($downloadUrl, $outputPath)
+    # Use curl.exe (built into Windows 10+) which handles redirects properly
+    $curlResult = & curl.exe -L -s -o $outputPath -w "%{http_code}" $downloadUrl 2>$null
+    if ($curlResult -ne "200" -or -not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -lt 1000000) {
+        # Fallback to .NET WebClient with TLS 1.2
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($downloadUrl, $outputPath)
+    }
     if (-not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -lt 1000000) {
         throw "Download incomplete or file too small"
     }
