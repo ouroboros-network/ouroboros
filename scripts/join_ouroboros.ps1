@@ -43,29 +43,36 @@ try {
     if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
         $downloadSuccess = $true
     }
-} catch { }
+} catch {
+    Write-Host "      BITS error: $($_.Exception.Message)" -ForegroundColor Gray
+}
 
-# Method 2: Invoke-WebRequest with progress disabled
+# Method 2: Invoke-WebRequest with explicit redirect handling
 if (-not $downloadSuccess) {
     try {
         Write-Host "      Trying alternate download method..." -ForegroundColor Gray
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -MaximumRedirection 10 -ErrorAction Stop
         if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
             $downloadSuccess = $true
         }
-    } catch { }
+    } catch {
+        Write-Host "      WebRequest error: $($_.Exception.Message)" -ForegroundColor Gray
+    }
 }
 
 # Method 3: System.Net.WebClient
 if (-not $downloadSuccess) {
     try {
+        Write-Host "      Trying WebClient method..." -ForegroundColor Gray
         $webClient = New-Object System.Net.WebClient
         $webClient.DownloadFile($downloadUrl, $outputPath)
         if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
             $downloadSuccess = $true
         }
-    } catch { }
+    } catch {
+        Write-Host "      WebClient error: $($_.Exception.Message)" -ForegroundColor Gray
+    }
 }
 
 if ($downloadSuccess) {
