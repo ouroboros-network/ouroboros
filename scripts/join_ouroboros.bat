@@ -97,7 +97,7 @@ echo [4/4] Creating helper scripts...
     echo @echo off
     echo cd /d "%INSTALL_DIR%"
     echo for /f "usebackq eol=# tokens=1,* delims==" %%%%a in ^(".env"^) do set "%%%%a=%%%%b"
-    echo "%BINARY%" start
+    echo "%BINARY%" join
 ) > "%INSTALL_DIR%\start-node.bat"
 
 (
@@ -122,9 +122,17 @@ set "PATH=%INSTALL_DIR%;%PATH%"
 :: Load environment and start
 echo Starting Ouroboros node...
 cd /d "%INSTALL_DIR%"
-for /f "usebackq eol=# tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
 
-start "" "%BINARY%" join
+:: Create a temporary startup script that loads env and runs the node
+(
+    echo @echo off
+    echo cd /d "%INSTALL_DIR%"
+    echo for /f "usebackq eol=# tokens=1,* delims==" %%%%a in ^(".env"^) do set "%%%%a=%%%%b"
+    echo "%BINARY%" join
+) > "%INSTALL_DIR%\run-node.bat"
+
+:: Start node in background with environment loaded
+start "Ouroboros Node" cmd /c "%INSTALL_DIR%\run-node.bat"
 
 timeout /t 5 /nobreak >nul
 

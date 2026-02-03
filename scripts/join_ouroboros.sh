@@ -172,7 +172,7 @@ cat > "$NODE_DIR/start.sh" <<EOF
 set -a
 source $NODE_DIR/.env
 set +a
-exec $NODE_DIR/ouro-bin start
+exec $NODE_DIR/ouro-bin join
 EOF
 chmod +x "$NODE_DIR/start.sh"
 
@@ -218,7 +218,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$NODE_DIR
 EnvironmentFile=$NODE_DIR/.env
-ExecStart=$NODE_DIR/ouro-bin start
+ExecStart=$NODE_DIR/ouro-bin join
 Restart=always
 RestartSec=10
 
