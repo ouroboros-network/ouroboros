@@ -26,25 +26,51 @@ New-Item -ItemType Directory -Force -Path "$installDir\data" | Out-Null
 Write-Host "[1/4] Downloading Ouroboros node..." -ForegroundColor Yellow
 Write-Host "      Architecture: $arch" -ForegroundColor Gray
 
-# Download the latest release binary
-$downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/latest/download/$binaryName"
+# Download the latest release binary - use direct version URL to avoid redirect issues
+$downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/download/v1.1.8/$binaryName"
 $outputPath = "$installDir\ouro-bin.exe"
 
+# Force TLS 1.2 for all .NET requests
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$downloadSuccess = $false
+
+# Method 1: Start-BitsTransfer (most reliable on Windows)
 try {
     Write-Host "      Downloading from GitHub releases..." -ForegroundColor Gray
-    # Use curl.exe (built into Windows 10+) which handles redirects properly
-    $curlResult = & curl.exe -L -s -o $outputPath -w "%{http_code}" $downloadUrl 2>$null
-    if ($curlResult -ne "200" -or -not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -lt 1000000) {
-        # Fallback to .NET WebClient with TLS 1.2
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Import-Module BitsTransfer -ErrorAction SilentlyContinue
+    Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+    if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
+        $downloadSuccess = $true
+    }
+} catch { }
+
+# Method 2: Invoke-WebRequest with progress disabled
+if (-not $downloadSuccess) {
+    try {
+        Write-Host "      Trying alternate download method..." -ForegroundColor Gray
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
+        if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
+            $downloadSuccess = $true
+        }
+    } catch { }
+}
+
+# Method 3: System.Net.WebClient
+if (-not $downloadSuccess) {
+    try {
         $webClient = New-Object System.Net.WebClient
         $webClient.DownloadFile($downloadUrl, $outputPath)
-    }
-    if (-not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -lt 1000000) {
-        throw "Download incomplete or file too small"
-    }
+        if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
+            $downloadSuccess = $true
+        }
+    } catch { }
+}
+
+if ($downloadSuccess) {
     Write-Host "      Binary downloaded successfully" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "      Download failed - building from source..." -ForegroundColor Yellow
     Write-Host ""
 
