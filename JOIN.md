@@ -99,7 +99,7 @@ Create a `.env` file in the `ouro_dag` directory:
 NODE_ID=node-YOUR_UNIQUE_ID
 DATABASE_URL=postgres://ouro:ouro_pass@localhost:5432/ouro_db
 ROCKSDB_PATH=/path/to/your/data/rocksdb
-API_ADDR=0.0.0.0:8001
+API_ADDR=0.0.0.0:8000
 LISTEN_ADDR=0.0.0.0:9001
 BFT_PORT=9091
 BFT_PEERS=34.173.167.150:9091
@@ -150,7 +150,7 @@ Start-Process .\target\release\ouro_dag.exe -ArgumentList "start"
 
 ```bash
 # Check health
-curl http://localhost:8001/health
+curl http://localhost:8000/health
 
 # Should return: {"status":"ok"}
 ```
@@ -191,7 +191,7 @@ Get-Process ouro_dag
 
 ```bash
 # Check API
-curl http://localhost:8001/health
+curl http://localhost:8000/health
 
 # Check if ports are listening
 netstat -tulpn | grep -E '8001|9001|9091'
@@ -267,7 +267,7 @@ The blockchain grows over time. Ensure you have at least 20GB free space initial
 ## Getting Help
 
 - **GitHub Issues:** https://github.com/ouroboros-network/ouroboros/issues
-- **Check seed node status:** `curl http://34.173.167.150:8001/health`
+- **Check seed node status:** `curl http://34.173.167.150:8000/health`
 
 ## Contributing
 

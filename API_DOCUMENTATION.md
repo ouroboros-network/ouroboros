@@ -2,7 +2,7 @@
 
 Complete REST API reference for interacting with Ouroboros nodes.
 
-**Base URL**: `http://localhost:8001` (local node) or `http://136.112.101.176:8001` (seed node)
+**Base URL**: `http://localhost:8000` (local node) or `http://136.112.101.176:8000` (seed node)
 
 ---
 
@@ -45,7 +45,7 @@ Get metrics for a specific validator.
 
 **Example:**
 ```bash
-curl http://localhost:8001/metrics/validator_abc123def456
+curl http://localhost:8000/metrics/validator_abc123def456
 ```
 
 **Response:**
@@ -76,7 +76,7 @@ Get top 100 validators by total rewards.
 
 **Example:**
 ```bash
-curl http://localhost:8001/metrics/leaderboard
+curl http://localhost:8000/metrics/leaderboard
 ```
 
 **Response:**
@@ -113,7 +113,7 @@ Get reward history for a validator (last 100 rewards).
 
 **Example:**
 ```bash
-curl http://localhost:8001/rewards/validator_abc123def456
+curl http://localhost:8000/rewards/validator_abc123def456
 ```
 
 **Response:**
@@ -191,7 +191,7 @@ Get pending transactions in the mempool (last 100).
 
 **Example:**
 ```bash
-curl http://localhost:8001/mempool
+curl http://localhost:8000/mempool
 ```
 
 **Response:**
@@ -219,7 +219,7 @@ Get transaction by ID or hash.
 
 **Example:**
 ```bash
-curl http://localhost:8001/tx/uuid-or-hash
+curl http://localhost:8000/tx/uuid-or-hash
 ```
 
 **Response:**
@@ -257,7 +257,7 @@ Get block information by block ID.
 
 **Example:**
 ```bash
-curl http://localhost:8001/block/block-uuid
+curl http://localhost:8000/block/block-uuid
 ```
 
 **Response:**
@@ -283,7 +283,7 @@ Get list of connected peers.
 
 **Example:**
 ```bash
-curl http://localhost:8001/peers
+curl http://localhost:8000/peers
 ```
 
 **Response:**
@@ -347,7 +347,7 @@ Default rate limits (configurable):
 Protected endpoints require an API key in the header:
 
 ```bash
-curl -H "X-API-Key: your_api_key" http://localhost:8001/tx/submit
+curl -H "X-API-Key: your_api_key" http://localhost:8000/tx/submit
 ```
 
 Default API key: `default_api_key` (change this in production!)
@@ -360,31 +360,31 @@ Default API key: `default_api_key` (change this in production!)
 ```bash
 # Get your node's metrics
 MY_ADDRESS="your_validator_address"
-curl http://localhost:8001/metrics/$MY_ADDRESS | jq
+curl http://localhost:8000/metrics/$MY_ADDRESS | jq
 
 # Calculate your earnings rate
-curl http://localhost:8001/metrics/$MY_ADDRESS | \
+curl http://localhost:8000/metrics/$MY_ADDRESS | \
   jq '.total_rewards / (.uptime_seconds / 3600)'
 ```
 
 ### Monitor Top Validators
 ```bash
 # Get top 10 validators
-curl http://localhost:8001/metrics/leaderboard | jq '.[0:10]'
+curl http://localhost:8000/metrics/leaderboard | jq '.[0:10]'
 
 # Find validator with most blocks proposed
-curl http://localhost:8001/metrics/leaderboard | \
+curl http://localhost:8000/metrics/leaderboard | \
   jq 'sort_by(.blocks_proposed) | reverse | .[0]'
 ```
 
 ### Track Your Rewards
 ```bash
 # Get recent rewards
-curl http://localhost:8001/rewards/$MY_ADDRESS | jq '.[0:10]'
+curl http://localhost:8000/rewards/$MY_ADDRESS | jq '.[0:10]'
 
 # Calculate total earned today
 TODAY=$(date +%Y-%m-%d)
-curl http://localhost:8001/rewards/$MY_ADDRESS | \
+curl http://localhost:8000/rewards/$MY_ADDRESS | \
   jq --arg today "$TODAY" '[.[] | select(.awarded_at | startswith($today))] | map(.amount) | add'
 ```
 

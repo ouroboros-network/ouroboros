@@ -102,13 +102,13 @@ Check any validator's metrics:
 
 ```bash
 # See validator contributions
-curl http://localhost:8001/metrics/VALIDATOR_ADDRESS
+curl http://localhost:8000/metrics/VALIDATOR_ADDRESS
 
 # View leaderboard
-curl http://localhost:8001/metrics/leaderboard
+curl http://localhost:8000/metrics/leaderboard
 
 # Check your rewards
-curl http://localhost:8001/rewards/YOUR_ADDRESS
+curl http://localhost:8000/rewards/YOUR_ADDRESS
 ```
 
 ### Secure Consensus
@@ -158,7 +158,7 @@ HotStuff BFT consensus with:
 ### Check Node Status
 
 ```bash
-curl http://localhost:8001/health
+curl http://localhost:8000/health
 ```
 
 ### View Logs
@@ -177,7 +177,7 @@ Get-Content $env:USERPROFILE\.ouroboros\node.log -Tail 50 -Wait
 
 ```bash
 # Replace YOUR_ADDRESS with your validator public key
-curl http://localhost:8001/metrics/YOUR_ADDRESS
+curl http://localhost:8000/metrics/YOUR_ADDRESS
 ```
 
 ---
