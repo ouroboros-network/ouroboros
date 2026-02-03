@@ -1137,7 +1137,9 @@ pub async fn run() -> std::io::Result<()> {
                     // Metrics endpoint for TPS and network stats
                     .route("/metrics", get(get_lightweight_metrics))
                     // Resources endpoint for system stats
-                    .route("/resources", get(get_lightweight_resources));
+                    .route("/resources", get(get_lightweight_resources))
+                    // Admin stop endpoint
+                    .route("/admin/stop", post(handle_admin_stop));
 
                 // Handler for /peers endpoint - read from peers.json file to avoid lock contention
                 async fn get_lightweight_peers() -> Json<serde_json::Value> {
@@ -1198,9 +1200,33 @@ pub async fn run() -> std::io::Result<()> {
                     let mem_mb = {
                         #[cfg(windows)]
                         {
-                            // On Windows, estimate based on working set
-                            // This is a rough estimate
-                            50u64 // Default estimate
+                            // On Windows, use tasklist to get working set size
+                            let pid = std::process::id();
+                            if let Ok(output) = std::process::Command::new("tasklist")
+                                .args(["/fi", &format!("PID eq {}", pid), "/fo", "csv", "/nh"])
+                                .output()
+                            {
+                                let stdout = String::from_utf8_lossy(&output.stdout);
+                                // Format: "name.exe","pid","Session Name","Session#","Mem Usage"
+                                // Mem Usage is like "45,000 K"
+                                if let Some(line) = stdout.lines().next() {
+                                    let parts: Vec<&str> = line.split(',').collect();
+                                    if parts.len() >= 5 {
+                                        let mem_str = parts[4].trim_matches('"').replace(" K", "").replace(",", "");
+                                        if let Ok(kb) = mem_str.parse::<u64>() {
+                                            kb / 1024 // Convert KB to MB
+                                        } else {
+                                            50u64
+                                        }
+                                    } else {
+                                        50u64
+                                    }
+                                } else {
+                                    50u64
+                                }
+                            } else {
+                                50u64
+                            }
                         }
                         #[cfg(not(windows))]
                         {
@@ -1249,6 +1275,17 @@ pub async fn run() -> std::io::Result<()> {
                         "net_in_kbps": 0.0,
                         "net_out_kbps": 0.0
                     }))
+                }
+
+                // Handler for /admin/stop - graceful shutdown
+                async fn handle_admin_stop() -> Json<serde_json::Value> {
+                    tracing::info!("Received shutdown request via /admin/stop");
+                    // Spawn a task to exit after a short delay so we can send the response
+                    tokio::spawn(async {
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        std::process::exit(0);
+                    });
+                    Json(serde_json::json!({"status": "stopping", "message": "Node shutting down"}))
                 }
 
                 println!("\n Lightweight node running!");
