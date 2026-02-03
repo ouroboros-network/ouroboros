@@ -35,80 +35,66 @@ $outputPath = "$installDir\ouro-bin.exe"
 
 $downloadSuccess = $false
 
-# Method 1: Start-BitsTransfer (most reliable on Windows)
+# Method 1: bitsadmin (built into all Windows, handles redirects well)
 try {
     Write-Host "      Downloading from GitHub releases..." -ForegroundColor Gray
-    Import-Module BitsTransfer -ErrorAction SilentlyContinue
-    Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+    $null = & bitsadmin /transfer "OuroDownload" /download /priority high $downloadUrl $outputPath 2>&1
     if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
         $downloadSuccess = $true
+        Write-Host "      Download successful (bitsadmin)" -ForegroundColor Green
     }
-} catch {
-    Write-Host "      BITS error: $($_.Exception.Message)" -ForegroundColor Gray
-}
+} catch { }
 
-# Method 2: Invoke-WebRequest with explicit redirect handling
+# Method 2: certutil (also built into Windows)
 if (-not $downloadSuccess) {
     try {
-        Write-Host "      Trying alternate download method..." -ForegroundColor Gray
+        Write-Host "      Trying certutil..." -ForegroundColor Gray
+        $null = & certutil -urlcache -split -f $downloadUrl $outputPath 2>&1
+        if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
+            $downloadSuccess = $true
+            Write-Host "      Download successful (certutil)" -ForegroundColor Green
+        }
+    } catch { }
+}
+
+# Method 3: Start-BitsTransfer PowerShell cmdlet
+if (-not $downloadSuccess) {
+    try {
+        Write-Host "      Trying BitsTransfer..." -ForegroundColor Gray
+        Import-Module BitsTransfer -ErrorAction SilentlyContinue
+        Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+        if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
+            $downloadSuccess = $true
+            Write-Host "      Download successful (BitsTransfer)" -ForegroundColor Green
+        }
+    } catch { }
+}
+
+# Method 4: Invoke-WebRequest
+if (-not $downloadSuccess) {
+    try {
+        Write-Host "      Trying WebRequest..." -ForegroundColor Gray
         $ProgressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -MaximumRedirection 10 -ErrorAction Stop
         if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
             $downloadSuccess = $true
+            Write-Host "      Download successful (WebRequest)" -ForegroundColor Green
         }
-    } catch {
-        Write-Host "      WebRequest error: $($_.Exception.Message)" -ForegroundColor Gray
-    }
+    } catch { }
 }
 
-# Method 3: System.Net.WebClient
 if (-not $downloadSuccess) {
-    try {
-        Write-Host "      Trying WebClient method..." -ForegroundColor Gray
-        $webClient = New-Object System.Net.WebClient
-        $webClient.DownloadFile($downloadUrl, $outputPath)
-        if ((Test-Path $outputPath) -and (Get-Item $outputPath).Length -gt 1000000) {
-            $downloadSuccess = $true
-        }
-    } catch {
-        Write-Host "      WebClient error: $($_.Exception.Message)" -ForegroundColor Gray
-    }
-}
-
-if ($downloadSuccess) {
-    Write-Host "      Binary downloaded successfully" -ForegroundColor Green
-} else {
-    Write-Host "      Download failed - building from source..." -ForegroundColor Yellow
     Write-Host ""
-
-    # Check dependencies
-    if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        Write-Host "Rust not found. Please install from: https://rustup.rs/" -ForegroundColor Red
-        Start-Process "https://rustup.rs/"
-        exit 1
-    }
-
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host "Git not found. Please install from: https://git-scm.com/download/win" -ForegroundColor Red
-        Start-Process "https://git-scm.com/download/win"
-        exit 1
-    }
-
-    Write-Host "Building from source (this may take 15-30 minutes)..." -ForegroundColor Yellow
-
-    # Clone and build
-    Set-Location $env:TEMP
-    if (Test-Path "ouroboros") {
-        Remove-Item -Recurse -Force ouroboros
-    }
-
-    git clone https://github.com/ouroboros-network/ouroboros.git
-    Set-Location ouroboros\ouro_dag
-
-    cargo build --release --bin ouro_dag -j 2
-
-    Copy-Item "target\release\ouro_dag.exe" $outputPath
-    Set-Location $installDir
+    Write-Host "ERROR: All download methods failed." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please download manually:" -ForegroundColor Yellow
+    Write-Host "  $downloadUrl" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Save it to:" -ForegroundColor Yellow
+    Write-Host "  $outputPath" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Then run this script again." -ForegroundColor Yellow
+    exit 1
 }
 
 Write-Host ""
