@@ -27,7 +27,7 @@ Write-Host "[1/4] Downloading Ouroboros node..." -ForegroundColor Yellow
 Write-Host "      Architecture: $arch" -ForegroundColor Gray
 
 # Download the latest release binary - use direct version URL to avoid redirect issues
-$downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/download/v1.1.8/$binaryName"
+$downloadUrl = "https://github.com/ouroboros-network/ouroboros/releases/download/v0.4.1/$binaryName"
 $outputPath = "$installDir\ouro-bin.exe"
 
 # Force TLS 1.2 for all .NET requests
