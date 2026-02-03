@@ -1135,7 +1135,9 @@ pub async fn run() -> std::io::Result<()> {
                     // Peers endpoint for lightweight node
                     .route("/peers", get(get_lightweight_peers))
                     // Metrics endpoint for TPS and network stats
-                    .route("/metrics", get(get_lightweight_metrics));
+                    .route("/metrics", get(get_lightweight_metrics))
+                    // Resources endpoint for system stats
+                    .route("/resources", get(get_lightweight_resources));
 
                 // Handler for /peers endpoint - read from peers.json file to avoid lock contention
                 async fn get_lightweight_peers() -> Json<serde_json::Value> {
@@ -1187,6 +1189,65 @@ pub async fn run() -> std::io::Result<()> {
                         "block_height": 0,
                         "network_tip": 0,
                         "sync_percent": 100.0
+                    }))
+                }
+
+                // Handler for /resources endpoint - return system resource usage
+                async fn get_lightweight_resources() -> Json<serde_json::Value> {
+                    // Get basic process memory info
+                    let mem_mb = {
+                        #[cfg(windows)]
+                        {
+                            // On Windows, estimate based on working set
+                            // This is a rough estimate
+                            50u64 // Default estimate
+                        }
+                        #[cfg(not(windows))]
+                        {
+                            // On Unix, try to read /proc/self/statm
+                            if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
+                                let parts: Vec<&str> = statm.split_whitespace().collect();
+                                if let Some(rss) = parts.get(1).and_then(|s| s.parse::<u64>().ok()) {
+                                    rss * 4096 / 1024 / 1024 // Convert pages to MB
+                                } else {
+                                    50u64
+                                }
+                            } else {
+                                50u64
+                            }
+                        }
+                    };
+
+                    // Get disk usage for .ouroboros directory
+                    let (disk_used, disk_total) = {
+                        let home = if cfg!(windows) {
+                            std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\".to_string())
+                        } else {
+                            std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+                        };
+                        let data_path = std::path::PathBuf::from(&home).join(".ouroboros").join("data");
+
+                        // Calculate data directory size
+                        let used = std::fs::read_dir(&data_path)
+                            .map(|entries| {
+                                entries
+                                    .filter_map(|e| e.ok())
+                                    .filter_map(|e| e.metadata().ok())
+                                    .map(|m| m.len())
+                                    .sum::<u64>()
+                            })
+                            .unwrap_or(0) as f64 / 1_073_741_824.0; // Convert to GB
+
+                        (used, 100.0f64) // Assume 100GB total for now
+                    };
+
+                    Json(serde_json::json!({
+                        "cpu_pct": 0.0, // CPU requires sampling over time
+                        "mem_mb": mem_mb,
+                        "disk_gb_used": disk_used,
+                        "disk_gb_total": disk_total,
+                        "net_in_kbps": 0.0,
+                        "net_out_kbps": 0.0
                     }))
                 }
 
