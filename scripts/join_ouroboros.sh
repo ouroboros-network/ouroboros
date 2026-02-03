@@ -55,43 +55,41 @@ mkdir -p "$NODE_DIR" "$DATA_DIR"
 
 # Step 1: Download binary
 echo "[1/4] Downloading Ouroboros node..."
-DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/latest/download/$BINARY_NAME"
+DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/download/v1.1.8/$BINARY_NAME"
 
-if curl -fsSL "$DOWNLOAD_URL" -o "$NODE_DIR/ouro-bin" 2>/dev/null && [ -s "$NODE_DIR/ouro-bin" ]; then
-    chmod +x "$NODE_DIR/ouro-bin"
-    echo "      Binary downloaded successfully"
-else
-    echo "      Download failed - building from source..."
-    echo ""
+download_success=false
 
-    # Check for Rust
-    if ! command -v cargo &> /dev/null; then
-        echo "Rust not found. Installing via rustup..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
+# Try curl first
+if curl -fsSL "$DOWNLOAD_URL" -o "$NODE_DIR/ouro-bin" 2>/dev/null; then
+    if [ -s "$NODE_DIR/ouro-bin" ] && [ $(stat -f%z "$NODE_DIR/ouro-bin" 2>/dev/null || stat -c%s "$NODE_DIR/ouro-bin" 2>/dev/null) -gt 1000000 ]; then
+        chmod +x "$NODE_DIR/ouro-bin"
+        echo "      Download successful"
+        download_success=true
     fi
+fi
 
-    # Check for Git
-    if ! command -v git &> /dev/null; then
-        echo "Git not found. Please install git first."
-        if [ "$OS" = "Darwin" ]; then
-            echo "  brew install git"
-        else
-            echo "  sudo apt install git  (Debian/Ubuntu)"
-            echo "  sudo dnf install git  (Fedora)"
+# Try wget as fallback
+if [ "$download_success" = false ] && command -v wget &> /dev/null; then
+    echo "      Trying wget..."
+    if wget -q "$DOWNLOAD_URL" -O "$NODE_DIR/ouro-bin" 2>/dev/null; then
+        if [ -s "$NODE_DIR/ouro-bin" ] && [ $(stat -f%z "$NODE_DIR/ouro-bin" 2>/dev/null || stat -c%s "$NODE_DIR/ouro-bin" 2>/dev/null) -gt 1000000 ]; then
+            chmod +x "$NODE_DIR/ouro-bin"
+            echo "      Download successful"
+            download_success=true
         fi
-        exit 1
     fi
+fi
 
-    echo "Building from source (this may take 15-30 minutes)..."
-    cd /tmp
-    rm -rf ouroboros
-    git clone https://github.com/ouroboros-network/ouroboros.git
-    cd ouroboros/ouro_dag
-    cargo build --release --bin ouro_dag
-    cp target/release/ouro_dag "$NODE_DIR/ouro-bin"
-    chmod +x "$NODE_DIR/ouro-bin"
-    cd "$NODE_DIR"
+if [ "$download_success" = false ]; then
+    echo ""
+    echo "ERROR: Download failed."
+    echo ""
+    echo "Please download manually from:"
+    echo "  $DOWNLOAD_URL"
+    echo ""
+    echo "Save it to: $NODE_DIR/ouro-bin"
+    echo "Then run: chmod +x $NODE_DIR/ouro-bin && $NODE_DIR/ouro-bin join"
+    exit 1
 fi
 
 echo ""

@@ -14,13 +14,23 @@ A decentralized blockchain network with lightweight nodes and transparent reward
 bash <(curl -fsSL https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.sh)
 ```
 
-### Windows (PowerShell as Administrator)
+### Windows
 
-Open PowerShell (not Command Prompt) as Administrator, then run:
+**Option 1: PowerShell (Recommended)**
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.ps1 | Invoke-Expression
 ```
+
+**Option 2: Command Prompt (if PowerShell has restrictions)**
+
+```cmd
+curl -L -o %TEMP%\join.bat https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.bat && %TEMP%\join.bat
+```
+
+**Option 3: Manual download**
+
+Download from [Releases](https://github.com/ouroboros-network/ouroboros/releases/latest) and run `ouro-bin.exe join`
 
 **That's it!** Your node will automatically:
 
