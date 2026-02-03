@@ -1349,8 +1349,8 @@ async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
             }
         }
 
-        // Fetch metrics (TPS, block height, etc.)
-        if let Ok(metrics) = fetch_api::<serde_json::Value>(&format!("{}/metrics", api)).await {
+        // Fetch metrics (TPS, block height, etc.) - use JSON endpoint
+        if let Ok(metrics) = fetch_api::<serde_json::Value>(&format!("{}/metrics/json", api)).await {
             if let Some(tps) = metrics.get("tps_1m").and_then(|v| v.as_f64()) {
                 data.tps_1m = tps;
             }

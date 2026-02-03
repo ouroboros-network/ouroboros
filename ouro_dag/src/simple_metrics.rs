@@ -1,14 +1,24 @@
-// Simple standalone metrics for Prometheus
+// Simple standalone metrics for Prometheus and JSON dashboard
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 pub static METRICS: Lazy<SimpleMetrics> = Lazy::new(|| SimpleMetrics::new());
+
+// Track transaction timestamps for TPS calculation
+const TPS_WINDOW_SECS: u64 = 60; // 1 minute rolling window
 
 pub struct SimpleMetrics {
     pub http_requests: Arc<AtomicU64>,
     pub http_errors: Arc<AtomicU64>,
     pub consensus_rounds: Arc<AtomicU64>,
+    pub transactions_processed: Arc<AtomicU64>,
+    // Rolling window of transaction timestamps (unix millis)
+    tx_timestamps: Arc<Mutex<VecDeque<u64>>>,
+    start_time: Instant,
 }
 
 impl SimpleMetrics {
@@ -17,6 +27,9 @@ impl SimpleMetrics {
             http_requests: Arc::new(AtomicU64::new(0)),
             http_errors: Arc::new(AtomicU64::new(0)),
             consensus_rounds: Arc::new(AtomicU64::new(0)),
+            transactions_processed: Arc::new(AtomicU64::new(0)),
+            tx_timestamps: Arc::new(Mutex::new(VecDeque::with_capacity(10000))),
+            start_time: Instant::now(),
         }
     }
 
@@ -30,6 +43,85 @@ impl SimpleMetrics {
 
     pub fn inc_consensus_rounds(&self) {
         self.consensus_rounds.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a transaction for TPS tracking
+    pub fn record_transaction(&self) {
+        self.transactions_processed.fetch_add(1, Ordering::Relaxed);
+
+        let now_millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        let mut timestamps = self.tx_timestamps.lock();
+        timestamps.push_back(now_millis);
+
+        // Prune old timestamps outside the window
+        let cutoff = now_millis.saturating_sub(TPS_WINDOW_SECS * 1000);
+        while let Some(&front) = timestamps.front() {
+            if front < cutoff {
+                timestamps.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Calculate transactions per second over the rolling window
+    pub fn calculate_tps(&self) -> f64 {
+        let now_millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        let cutoff = now_millis.saturating_sub(TPS_WINDOW_SECS * 1000);
+
+        let mut timestamps = self.tx_timestamps.lock();
+
+        // Prune old timestamps
+        while let Some(&front) = timestamps.front() {
+            if front < cutoff {
+                timestamps.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        let count = timestamps.len();
+        if count == 0 {
+            return 0.0;
+        }
+
+        // TPS = transactions in window / window duration in seconds
+        count as f64 / TPS_WINDOW_SECS as f64
+    }
+
+    /// Get uptime in seconds
+    pub fn uptime_secs(&self) -> u64 {
+        self.start_time.elapsed().as_secs()
+    }
+
+    /// Export metrics as JSON for the dashboard
+    pub fn export_json(&self) -> serde_json::Value {
+        let (active_conns, dedupe, peer_count) = crate::network::get_p2p_metrics();
+        let tps = self.calculate_tps();
+
+        serde_json::json!({
+            "tps_1m": tps,
+            "tps_5m": tps, // Using same value for now
+            "transactions_total": self.transactions_processed.load(Ordering::Relaxed),
+            "http_requests": self.http_requests.load(Ordering::Relaxed),
+            "http_errors": self.http_errors.load(Ordering::Relaxed),
+            "consensus_rounds": self.consensus_rounds.load(Ordering::Relaxed),
+            "peer_connections": active_conns,
+            "peer_count": peer_count,
+            "dedupe_entries": dedupe,
+            "uptime_secs": self.uptime_secs(),
+            "mempool_count": 0, // TODO: Get from actual mempool
+            "block_height": self.consensus_rounds.load(Ordering::Relaxed),
+            "sync_percent": 100.0
+        })
     }
 
     pub fn export_prometheus(&self) -> String {

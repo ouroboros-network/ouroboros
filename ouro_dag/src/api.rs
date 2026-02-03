@@ -1135,6 +1135,96 @@ async fn get_active_nodes(
         })),
     ))
 }
+
+/// Get metrics in JSON format for dashboard
+async fn get_metrics_json() -> impl IntoResponse {
+    METRICS.inc_http_requests();
+    Json(METRICS.export_json())
+}
+
+/// Get system resource usage (CPU, memory, disk)
+async fn get_resources() -> impl IntoResponse {
+    METRICS.inc_http_requests();
+
+    // Get memory usage
+    let mem_mb = get_process_memory_mb();
+
+    // Get disk usage for data directory
+    let (disk_used_gb, disk_total_gb) = get_disk_usage();
+
+    // CPU requires sampling over time - return 0 for now
+    // A proper implementation would sample /proc/stat or use sysinfo crate
+    let cpu_pct = 0.0f64;
+
+    Json(serde_json::json!({
+        "cpu_pct": cpu_pct,
+        "mem_mb": mem_mb,
+        "disk_gb_used": disk_used_gb,
+        "disk_gb_total": disk_total_gb,
+        "net_in_kbps": 0.0,
+        "net_out_kbps": 0.0,
+        "uptime_secs": METRICS.uptime_secs()
+    }))
+}
+
+/// Get process memory usage in MB
+fn get_process_memory_mb() -> u64 {
+    #[cfg(windows)]
+    {
+        // On Windows, use tasklist to get working set size
+        let pid = std::process::id();
+        if let Ok(output) = std::process::Command::new("tasklist")
+            .args(["/fi", &format!("PID eq {}", pid), "/fo", "csv", "/nh"])
+            .output()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = stdout.lines().next() {
+                let parts: Vec<&str> = line.split(',').collect();
+                if parts.len() >= 5 {
+                    let mem_str = parts[4]
+                        .trim_matches('"')
+                        .replace(" K", "")
+                        .replace(",", "");
+                    if let Ok(kb) = mem_str.parse::<u64>() {
+                        return kb / 1024;
+                    }
+                }
+            }
+        }
+        50 // Default fallback
+    }
+    #[cfg(not(windows))]
+    {
+        // On Unix, try to read /proc/self/statm
+        if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
+            let parts: Vec<&str> = statm.split_whitespace().collect();
+            if let Some(rss) = parts.get(1).and_then(|s| s.parse::<u64>().ok()) {
+                return rss * 4096 / 1024 / 1024; // Convert pages to MB
+            }
+        }
+        50 // Default fallback
+    }
+}
+
+/// Get disk usage for data directory
+fn get_disk_usage() -> (f64, f64) {
+    let data_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "./data".to_string());
+
+    // Calculate data directory size
+    let used = std::fs::read_dir(&data_path)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| e.metadata().ok())
+                .map(|m| m.len())
+                .sum::<u64>()
+        })
+        .unwrap_or(0) as f64
+        / 1_073_741_824.0; // Convert to GB
+
+    (used, 100.0) // Assume 100GB total for now
+}
+
 pub fn router(
     db_peer_store: crate::network::PeerStore,
     batch_writer: Arc<crate::batch_writer::BatchWriter>,
@@ -1173,7 +1263,9 @@ pub fn router(
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/health/detailed", get(health_detailed))
-        .route("/metrics", get(get_metrics)); // Prometheus metrics endpoint
+        .route("/metrics", get(get_metrics)) // Prometheus text format
+        .route("/metrics/json", get(get_metrics_json)) // JSON format for dashboard
+        .route("/resources", get(get_resources)); // System resource usage
 
     // Protected routes with rate limiting and authentication
     // Applies BOTH rate limiting and authentication (layers run bottom to top)
