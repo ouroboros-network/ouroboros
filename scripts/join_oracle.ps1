@@ -80,7 +80,7 @@ try {
 Write-Host ""
 
 # Get seed node address
-$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9001" }
+$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9000" }
 
 # Create oracle configuration
 $configPath = "$installDir\oracle_config.json"

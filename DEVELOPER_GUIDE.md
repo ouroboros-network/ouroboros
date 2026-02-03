@@ -219,7 +219,7 @@ P2P_PORT=9000
 P2P_LISTEN_ADDR=0.0.0.0:9000
 
 # Database (choose one)
-STORAGE_MODE=rocks  # or 'postgres' for production
+STORAGE_MODE=full  # or 'postgres' for production
 ROCKSDB_PATH=./mainchain_data
 
 # PostgreSQL (if using STORAGE_MODE=postgres)

@@ -41,12 +41,12 @@ Write-Host " ✅" -ForegroundColor Green
 Write-Host "[3/5] ⚙️  Configuring node..." -NoNewline
 @"
 ROCKSDB_PATH=$dataDir
-STORAGE_MODE=rocks
+STORAGE_MODE=full
 RUST_LOG=info
-API_ADDR=0.0.0.0:8001
-LISTEN_ADDR=0.0.0.0:9001
+API_ADDR=0.0.0.0:8000
+LISTEN_ADDR=0.0.0.0:9000
 NODE_ID=$nodeId
-SEED_NODES=136.112.101.176:9001
+SEED_NODES=136.112.101.176:9000
 "@ | Set-Content "$nodeDir\.env"
 Write-Host " ✅" -ForegroundColor Green
 
@@ -80,8 +80,8 @@ switch ($args[0]) {
         Write-Host "Wallet: $wallet"
         Write-Host ""
         try {
-            $health = Invoke-WebRequest -Uri "http://localhost:8001/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-            Write-Host "API: http://localhost:8001" -ForegroundColor Green
+            $health = Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            Write-Host "API: http://localhost:8000" -ForegroundColor Green
             Write-Host ""
             Write-Host "Check rewards: ouro rewards"
             Write-Host "Wallet balance: ouro wallet balance"
@@ -120,7 +120,7 @@ switch ($args[0]) {
             $wallet = if (Test-Path "wallet.txt") { Get-Content "wallet.txt" } else { "Not created" }
             Write-Host "Checking balance for $wallet..."
             try {
-                $balance = Invoke-WebRequest -Uri "http://localhost:8001/balance/$wallet" -UseBasicParsing -TimeoutSec 5
+                $balance = Invoke-WebRequest -Uri "http://localhost:8000/balance/$wallet" -UseBasicParsing -TimeoutSec 5
                 Write-Host $balance.Content
             } catch {
                 Write-Host "Error: API offline or unreachable" -ForegroundColor Red
@@ -137,7 +137,7 @@ switch ($args[0]) {
         $nodeId = if (Test-Path "node_id.txt") { Get-Content "node_id.txt" } else { "Unknown" }
         Write-Host "Fetching rewards for $nodeId..."
         try {
-            $rewards = Invoke-WebRequest -Uri "http://localhost:8001/metrics/$nodeId" -UseBasicParsing -TimeoutSec 5
+            $rewards = Invoke-WebRequest -Uri "http://localhost:8000/metrics/$nodeId" -UseBasicParsing -TimeoutSec 5
             Write-Host $rewards.Content
         } catch {
             Write-Host "Error: API offline or unreachable" -ForegroundColor Red
@@ -212,7 +212,7 @@ Write-Host "==========================================" -ForegroundColor Green
 Write-Host "`n📊 Your Node:" -ForegroundColor Cyan
 Write-Host "   Node ID: $nodeId"
 Write-Host "   Wallet:  $walletAddr"
-Write-Host "   Status:  http://localhost:8001/health"
+Write-Host "   Status:  http://localhost:8000/health"
 Write-Host "`n💰 Earnings:" -ForegroundColor Yellow
 Write-Host "   ~4.5 OURO/hour (based on uptime + validations)"
 Write-Host "   Check rewards: ouro rewards"

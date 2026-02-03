@@ -98,7 +98,7 @@ NODE_ID=oracle-testnet-$(openssl rand -hex 4)
 
 # Storage
 ROCKSDB_PATH=$DATA_DIR/rocksdb
-STORAGE_MODE=rocks
+STORAGE_MODE=full
 
 # Network Ports
 API_ADDR=0.0.0.0:8001
