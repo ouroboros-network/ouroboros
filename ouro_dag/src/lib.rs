@@ -1936,6 +1936,28 @@ async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
             }
         }
 
+        // Fetch resources (CPU, MEM, DISK, NET)
+        if let Ok(resources) = fetch_api::<serde_json::Value>(&format!("{}/resources", api)).await {
+            if let Some(cpu) = resources.get("cpu_pct").and_then(|v| v.as_f64()) {
+                data.cpu_percent = cpu;
+            }
+            if let Some(mem) = resources.get("mem_mb").and_then(|v| v.as_u64()) {
+                data.mem_mb = mem;
+            }
+            if let Some(disk_used) = resources.get("disk_gb_used").and_then(|v| v.as_f64()) {
+                data.disk_used_gb = disk_used;
+            }
+            if let Some(disk_total) = resources.get("disk_gb_total").and_then(|v| v.as_f64()) {
+                data.disk_total_gb = disk_total;
+            }
+            if let Some(net_in) = resources.get("net_in_kbps").and_then(|v| v.as_f64()) {
+                data.net_in_kbps = net_in;
+            }
+            if let Some(net_out) = resources.get("net_out_kbps").and_then(|v| v.as_f64()) {
+                data.net_out_kbps = net_out;
+            }
+        }
+
         print_dashboard(&data);
 
         if !watch {
