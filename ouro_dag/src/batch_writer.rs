@@ -36,20 +36,14 @@ pub struct BatchWriter {
 impl BatchWriter {
     /// Create a new BatchWriter and spawn the background flusher task
     pub fn new(rocks_db: crate::storage::RocksDb) -> Self {
-        println!("CONFIG: DEBUG: BatchWriter::new() called");
         let (tx_sender, tx_receiver) = mpsc::channel::<PendingTransaction>(10000);
-        println!("CONFIG: DEBUG: Channel created with capacity 10000");
 
-        // Spawn background task to process batches (keep JoinHandle to prevent task from being dropped)
-        println!("CONFIG: DEBUG: About to spawn batch_processor task");
+        // Spawn background task to process batches
         let processor_handle = tokio::spawn(async move {
-            println!("CONFIG: DEBUG: Inside spawned task closure");
             if let Err(e) = batch_processor(tx_receiver, rocks_db).await {
-                error!("ERROR Batch processor error: {}", e);
-                println!("ERROR Batch processor error: {}", e);
+                error!("Batch processor error: {}", e);
             }
         });
-        println!("CONFIG: DEBUG: tokio::spawn returned (task spawned)");
 
         Self {
             tx_sender,
@@ -59,12 +53,10 @@ impl BatchWriter {
 
     /// Submit a transaction for batch processing (non-blocking)
     pub async fn submit(&self, tx: PendingTransaction) -> Result<()> {
-        println!(" BatchWriter.submit() called for tx: {}", tx.tx_hash);
         self.tx_sender
             .send(tx)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to queue transaction: {}", e))?;
-        println!(" Transaction queued successfully");
         Ok(())
     }
 }
@@ -74,20 +66,11 @@ async fn batch_processor(
     mut rx: mpsc::Receiver<PendingTransaction>,
     rocks_db: crate::storage::RocksDb,
 ) -> Result<()> {
-    println!("CONFIG: DEBUG: batch_processor() function called - ENTRY POINT");
-
     let mut batch: Vec<PendingTransaction> = Vec::with_capacity(BATCH_SIZE);
-    println!("CONFIG: DEBUG: Batch vector created");
-
     let mut flush_timer = interval(Duration::from_millis(FLUSH_INTERVAL_MS));
-    println!("CONFIG: DEBUG: Flush timer created");
 
     info!(
-        "STARTING: Batch transaction processor started (batch_size={}, flush_interval={}ms)",
-        BATCH_SIZE, FLUSH_INTERVAL_MS
-    );
-    println!(
-        "STARTING: Batch transaction processor started (batch_size={}, flush_interval={}ms)",
+        "Batch transaction processor started (batch_size={}, flush_interval={}ms)",
         BATCH_SIZE, FLUSH_INTERVAL_MS
     );
 

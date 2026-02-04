@@ -116,7 +116,10 @@ if (Test-Path $lockFile) {
 
 # Configuration
 Write-Host "[3/4] Configuring node..." -ForegroundColor Yellow
-$seedNode = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { "136.112.101.176:9000" }
+
+# Multiple seed nodes for redundancy
+$defaultSeeds = "136.112.101.176:9000,34.57.121.217:9000"
+$seedNodes = if ($env:OUROBOROS_SEED) { $env:OUROBOROS_SEED } else { $defaultSeeds }
 $envFile = "$installDir\.env"
 
 # Check if existing config has required keys
@@ -132,10 +135,20 @@ if (Test-Path $envFile) {
 }
 
 if ($needsNewConfig) {
-    # Generate random secrets
-    $bftSecret = -join ((1..64) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
-    $nodeId = "node-" + -join ((1..8) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
-    $apiKey = -join ((1..32) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
+    # Generate cryptographically secure random secrets
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $bftBytes = New-Object byte[] 32
+    $rng.GetBytes($bftBytes)
+    $bftSecret = [System.BitConverter]::ToString($bftBytes).Replace("-", "").ToLower()
+
+    $idBytes = New-Object byte[] 8
+    $rng.GetBytes($idBytes)
+    $nodeId = "ouro_" + [System.BitConverter]::ToString($idBytes).Replace("-", "").ToLower()
+
+    $keyBytes = New-Object byte[] 16
+    $rng.GetBytes($keyBytes)
+    $apiKey = "ouro_" + [System.BitConverter]::ToString($keyBytes).Replace("-", "").ToLower()
+
     Write-Host "      Generated new node identity: $nodeId" -ForegroundColor Gray
 
     # Save to .env file - USE CONSISTENT PORTS: API=8000, P2P=9000
@@ -144,11 +157,12 @@ if ($needsNewConfig) {
 DATABASE_PATH=$installDir\data
 API_ADDR=0.0.0.0:8000
 LISTEN_ADDR=0.0.0.0:9000
-PEER_ADDRS=$seedNode
+PEER_ADDRS=$seedNodes
 NODE_ID=$nodeId
 BFT_SECRET_SEED=$bftSecret
 API_KEYS=$apiKey
 RUST_LOG=info
+STORAGE_MODE=full
 "@ | Out-File -FilePath $envFile -Encoding ASCII
 }
 

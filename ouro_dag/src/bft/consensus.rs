@@ -65,41 +65,50 @@ impl BFTNode {
     /// Sign a block ID using Ed25519 cryptography.
     /// Returns binary signature bytes (more efficient than hex encoding).
     ///
-    /// If the private key seed is invalid or empty, returns a fallback signature
-    /// (for backward compatibility with tests/legacy code).
+    /// Returns error if the key is invalid - NEVER uses fallback signatures
+    /// as that would compromise BFT security.
     pub fn sign_block(&self, block_id: &Uuid) -> Vec<u8> {
+        self.try_sign_block(block_id).unwrap_or_else(|e| {
+            // In production, invalid keys should cause the node to stop participating
+            // rather than producing invalid signatures that break consensus
+            log::error!(
+                "CRITICAL: Node {} cannot sign block {}: {}",
+                self.name, block_id, e
+            );
+            log::error!("Node will not participate in consensus until key is fixed");
+            // Return empty signature - validators will reject this block
+            Vec::new()
+        })
+    }
+
+    /// Try to sign a block, returning Result for proper error handling
+    pub fn try_sign_block(&self, block_id: &Uuid) -> Result<Vec<u8>> {
         // Construct canonical message to sign: block_id bytes
         let message = block_id.as_bytes();
 
-        // Use real Ed25519 signing if we have a valid 32-byte seed
-        if self.private_key_seed.len() == 32 {
-            match crate::crypto::keys::sign_bytes(&self.private_key_seed, message) {
-                Some(sig_bytes) => {
-                    // Return binary signature (32-40% more efficient than hex)
-                    log::debug!(
-                        "Signed block {} with Ed25519 (node: {})",
-                        block_id,
-                        self.name
-                    );
-                    return sig_bytes;
-                }
-                None => {
-                    log::warn!(
-                        "Ed25519 signing failed for node {} - using fallback signature",
-                        self.name
-                    );
-                }
-            }
-        } else {
-            log::warn!(
-                "Node {} has invalid key seed (len: {}, expected: 32) - using fallback signature",
-                self.name,
+        // Require valid 32-byte seed
+        if self.private_key_seed.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "Invalid key seed length: {} (expected 32 bytes)",
                 self.private_key_seed.len()
-            );
+            ));
         }
 
-        // Fallback for tests/invalid keys (should not happen in production)
-        format!("fallback_sig:{}:{}", self.name, block_id).into_bytes()
+        // Use real Ed25519 signing
+        match crate::crypto::keys::sign_bytes(&self.private_key_seed, message) {
+            Some(sig_bytes) => {
+                log::debug!(
+                    "Signed block {} with Ed25519 (node: {})",
+                    block_id,
+                    self.name
+                );
+                Ok(sig_bytes)
+            }
+            None => Err(anyhow::anyhow!(
+                "Ed25519 signing failed for node {}",
+                self.name
+            )),
+        }
     }
 
     /// Sign a block with hybrid post-quantum signatures (Phase 6)

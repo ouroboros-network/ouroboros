@@ -26,21 +26,35 @@ pub fn get_global_storage() -> Option<RocksDb> {
 }
 
 /// Open RocksDB with optimized settings and retry/backoff
+/// Returns Result instead of panicking on failure
 pub fn open_db(path: &str) -> RocksDb {
+    // Wrapper that panics for backward compatibility - use try_open_db for Result
+    try_open_db(path).unwrap_or_else(|e| {
+        eprintln!(" FATAL: Failed to open database at '{}': {}", path, e);
+        eprintln!("   Possible causes:");
+        eprintln!("   - Another node instance is running (database locked)");
+        eprintln!("   - Disk is full or permissions denied");
+        eprintln!("   - Database is corrupted (try removing {})", path);
+        std::process::exit(1);
+    })
+}
+
+/// Try to open RocksDB, returning Result for graceful error handling
+pub fn try_open_db(path: &str) -> Result<RocksDb, String> {
     let mut attempt = 0u32;
     let max_attempts = 8u32;
     let mut wait = 250u64;
 
     loop {
         match open_rocksdb_internal(path) {
-            Ok(db) => return Arc::new(db),
+            Ok(db) => return Ok(Arc::new(db)),
             Err(e) => {
                 attempt += 1;
                 if attempt >= max_attempts {
-                    panic!(
-                        "Failed to open RocksDB at '{}': {} (attempts={})",
-                        path, e, attempt
-                    );
+                    return Err(format!(
+                        "Failed to open RocksDB at '{}' after {} attempts: {}",
+                        path, attempt, e
+                    ));
                 }
                 eprintln!(
                     "open_db attempt {}/{} failed: {} — retrying in {}ms",

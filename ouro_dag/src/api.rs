@@ -176,6 +176,7 @@ struct SimpleRateLimiter {
     buckets: Arc<Mutex<HashMap<String, (usize, Instant)>>>,
     max_requests: usize,
     window_duration: Duration,
+    last_cleanup: Arc<Mutex<Instant>>,
 }
 
 impl SimpleRateLimiter {
@@ -184,10 +185,14 @@ impl SimpleRateLimiter {
             buckets: Arc::new(Mutex::new(HashMap::new())),
             max_requests,
             window_duration: Duration::from_secs(window_secs),
+            last_cleanup: Arc::new(Mutex::new(Instant::now())),
         }
     }
 
     fn check_rate_limit(&self, ip: &IpAddr) -> bool {
+        // Periodic cleanup every 5 minutes to prevent memory growth
+        self.maybe_cleanup();
+
         let mut buckets = self.buckets.lock().unwrap_or_else(|poisoned| {
             warn!("Rate limiter mutex poisoned - recovering data");
             poisoned.into_inner()
@@ -213,17 +218,40 @@ impl SimpleRateLimiter {
         }
     }
 
-    /// Cleanup old entries (optional, prevents memory growth)
-    #[allow(dead_code)]
-    fn cleanup_old_entries(&self) {
+    /// Cleanup old entries periodically (prevents memory growth / DoS)
+    fn maybe_cleanup(&self) {
+        let cleanup_interval = Duration::from_secs(300); // 5 minutes
+
+        // Check if cleanup is needed
+        {
+            let last = self.last_cleanup.lock().unwrap_or_else(|p| p.into_inner());
+            if last.elapsed() < cleanup_interval {
+                return;
+            }
+        }
+
+        // Do cleanup
         let mut buckets = self.buckets.lock().unwrap_or_else(|poisoned| {
-            warn!("WARNING Rate limiter mutex poisoned during cleanup - recovering data");
+            warn!("Rate limiter mutex poisoned during cleanup - recovering data");
             poisoned.into_inner()
         });
+
         let now = Instant::now();
+        let before = buckets.len();
         buckets.retain(|_, (_, window_start)| {
             now.duration_since(*window_start) < self.window_duration * 2
         });
+        let after = buckets.len();
+
+        if before != after {
+            info!("Rate limiter cleanup: removed {} stale entries ({} remaining)",
+                before - after, after);
+        }
+
+        // Update last cleanup time
+        if let Ok(mut last) = self.last_cleanup.lock() {
+            *last = now;
+        }
     }
 }
 
@@ -392,11 +420,40 @@ async fn submit_tx(
 ///////////////////////////////////////////////////////////////////////////
 // GET /mempool
 ///////////////////////////////////////////////////////////////////////////
-async fn get_mempool(Extension(_db): Extension<Arc<RocksDb>>) -> ApiResult {
-    // TODO_ROCKSDB: Implement mempool querying with RocksDB
-    // For now, return empty array
-    let out: Vec<JsonValue> = Vec::new();
-    Ok((StatusCode::OK, Json(out)).into_response())
+async fn get_mempool(Extension(db): Extension<Arc<RocksDb>>) -> ApiResult {
+    // Query mempool entries from RocksDB (prefix: "mempool:")
+    let mut txs: Vec<JsonValue> = Vec::new();
+
+    // Iterate over mempool entries
+    let iter = db.prefix_iterator(b"mempool:");
+    for item in iter {
+        match item {
+            Ok((key, value)) => {
+                // Only include keys that start with "mempool:"
+                let key_str = String::from_utf8_lossy(&key);
+                if !key_str.starts_with("mempool:") {
+                    break; // Prefix iterator exhausted
+                }
+                if let Ok(tx) = serde_json::from_slice::<JsonValue>(&value) {
+                    txs.push(tx);
+                }
+                // Limit to prevent huge responses
+                if txs.len() >= 1000 {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "count": txs.len(),
+            "transactions": txs
+        })),
+    )
+        .into_response())
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -424,37 +481,71 @@ async fn get_tx_by_hash(
     get_tx_by_hash_inner(&hash, &db_pool).await
 }
 
-async fn get_tx_by_id_inner(_uuid: Uuid, _db_pool: &Arc<RocksDb>) -> ApiResult {
-    // TODO_ROCKSDB: Implement transaction lookup by ID with RocksDB
-    Ok((
-        StatusCode::NOT_FOUND,
-        Json(serde_json::json!({ "error": "tx not found - RocksDB not implemented" })),
-    )
-        .into_response())
+async fn get_tx_by_id_inner(uuid: Uuid, db_pool: &Arc<RocksDb>) -> ApiResult {
+    // Look up transaction by UUID
+    let key = format!("tx:{}", uuid);
+    match crate::storage::get_str::<JsonValue>(db_pool, &key) {
+        Ok(Some(tx)) => Ok((StatusCode::OK, Json(tx)).into_response()),
+        Ok(None) => Ok((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "transaction not found", "id": uuid.to_string() })),
+        )
+            .into_response()),
+        Err(e) => Ok((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("database error: {}", e) })),
+        )
+            .into_response()),
+    }
 }
 
-async fn get_tx_by_hash_inner(_hash: &str, _db_pool: &Arc<RocksDb>) -> ApiResult {
-    // TODO_ROCKSDB: Implement transaction lookup by hash with RocksDB
-    Ok((
-        StatusCode::NOT_FOUND,
-        Json(serde_json::json!({ "error": "tx not found - RocksDB not implemented" })),
-    )
-        .into_response())
+async fn get_tx_by_hash_inner(hash: &str, db_pool: &Arc<RocksDb>) -> ApiResult {
+    // Look up transaction by hash
+    let key = format!("tx_hash:{}", hash);
+    match crate::storage::get_str::<JsonValue>(db_pool, &key) {
+        Ok(Some(tx)) => Ok((StatusCode::OK, Json(tx)).into_response()),
+        Ok(None) => {
+            // Try alternate key format
+            let alt_key = format!("tx:{}", hash);
+            match crate::storage::get_str::<JsonValue>(db_pool, &alt_key) {
+                Ok(Some(tx)) => Ok((StatusCode::OK, Json(tx)).into_response()),
+                _ => Ok((
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": "transaction not found", "hash": hash })),
+                )
+                    .into_response()),
+            }
+        }
+        Err(e) => Ok((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("database error: {}", e) })),
+        )
+            .into_response()),
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////
 // GET /proof/:tx (lookup tx_index)
 ///////////////////////////////////////////////////////////////////////////
 async fn get_proof_by_tx(
-    Path(_tx): Path<String>,
-    Extension(_db): Extension<Arc<RocksDb>>,
+    Path(tx): Path<String>,
+    Extension(db): Extension<Arc<RocksDb>>,
 ) -> ApiResult {
-    // TODO_ROCKSDB: Implement proof lookup with RocksDB
-    Ok((
-        StatusCode::NOT_FOUND,
-        Json(serde_json::json!({ "error": "proof not found - RocksDB not implemented" })),
-    )
-        .into_response())
+    // Look up proof/inclusion data for transaction
+    let key = format!("proof:{}", tx);
+    match crate::storage::get_str::<JsonValue>(&db, &key) {
+        Ok(Some(proof)) => Ok((StatusCode::OK, Json(proof)).into_response()),
+        Ok(None) => Ok((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "proof not found", "tx": tx })),
+        )
+            .into_response()),
+        Err(e) => Ok((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("database error: {}", e) })),
+        )
+            .into_response()),
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1210,19 +1301,105 @@ fn get_process_memory_mb() -> u64 {
 fn get_disk_usage() -> (f64, f64) {
     let data_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "./data".to_string());
 
-    // Calculate data directory size
-    let used = std::fs::read_dir(&data_path)
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .filter_map(|e| e.metadata().ok())
-                .map(|m| m.len())
-                .sum::<u64>()
-        })
-        .unwrap_or(0) as f64
-        / 1_073_741_824.0; // Convert to GB
+    // Calculate data directory size recursively
+    let used = calculate_dir_size(&data_path) as f64 / 1_073_741_824.0; // Convert to GB
 
-    (used, 100.0) // Assume 100GB total for now
+    // Get total disk space
+    let total = get_disk_total_gb(&data_path);
+
+    (used, total)
+}
+
+/// Recursively calculate directory size
+fn calculate_dir_size(path: &str) -> u64 {
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_file() {
+                if let Ok(meta) = entry.metadata() {
+                    total += meta.len();
+                }
+            } else if path.is_dir() {
+                total += calculate_dir_size(&path.to_string_lossy());
+            }
+        }
+    }
+    total
+}
+
+/// Get total disk space in GB
+fn get_disk_total_gb(path: &str) -> f64 {
+    #[cfg(windows)]
+    {
+        // On Windows, use GetDiskFreeSpaceExW
+        use std::os::windows::ffi::OsStrExt;
+        use std::ffi::OsStr;
+
+        let path_wide: Vec<u16> = OsStr::new(path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let mut free_bytes: u64 = 0;
+        let mut total_bytes: u64 = 0;
+        let mut total_free: u64 = 0;
+
+        unsafe {
+            // GetDiskFreeSpaceExW
+            #[link(name = "kernel32")]
+            extern "system" {
+                fn GetDiskFreeSpaceExW(
+                    lpDirectoryName: *const u16,
+                    lpFreeBytesAvailableToCaller: *mut u64,
+                    lpTotalNumberOfBytes: *mut u64,
+                    lpTotalNumberOfFreeBytes: *mut u64,
+                ) -> i32;
+            }
+
+            if GetDiskFreeSpaceExW(
+                path_wide.as_ptr(),
+                &mut free_bytes,
+                &mut total_bytes,
+                &mut total_free,
+            ) != 0
+            {
+                return total_bytes as f64 / 1_073_741_824.0;
+            }
+        }
+        100.0 // Fallback
+    }
+    #[cfg(not(windows))]
+    {
+        // On Unix, use statvfs
+        use std::ffi::CString;
+
+        if let Ok(c_path) = CString::new(path) {
+            unsafe {
+                #[repr(C)]
+                struct Statvfs {
+                    f_bsize: u64,
+                    f_frsize: u64,
+                    f_blocks: u64,
+                    f_bfree: u64,
+                    f_bavail: u64,
+                    // ... other fields we don't need
+                    _padding: [u64; 6],
+                }
+
+                extern "C" {
+                    fn statvfs(path: *const i8, buf: *mut Statvfs) -> i32;
+                }
+
+                let mut stat: Statvfs = std::mem::zeroed();
+                if statvfs(c_path.as_ptr(), &mut stat) == 0 {
+                    let total = stat.f_blocks * stat.f_frsize;
+                    return total as f64 / 1_073_741_824.0;
+                }
+            }
+        }
+        100.0 // Fallback
+    }
 }
 
 pub fn router(

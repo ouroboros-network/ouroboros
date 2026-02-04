@@ -40,14 +40,26 @@ impl NodeHeartbeat {
 }
 
 /// Calculate pending rewards for a node
+/// Uses saturating arithmetic to prevent overflow if clock goes backward
 pub fn calculate_pending_rewards(heartbeat: &NodeHeartbeat) -> u64 {
     let now = Utc::now();
-    let secs_since_claim = (now - heartbeat.last_reward_claim).num_seconds() as u64;
+    let duration = now.signed_duration_since(heartbeat.last_reward_claim);
+
+    // Clamp to non-negative (handles clock going backward)
+    let secs_since_claim = duration.num_seconds().max(0) as u64;
+
+    // Cap maximum claimable time to 30 days to prevent abuse
+    let capped_secs = secs_since_claim.min(30 * 86400);
 
     // Reward = (seconds_online / 86400) * REWARD_PER_DAY
     // 86400 = seconds in a day
-    let days = secs_since_claim as f64 / 86400.0;
-    (days * REWARD_PER_DAY as f64) as u64
+    let days = capped_secs as f64 / 86400.0;
+
+    // Use saturating conversion to prevent overflow
+    let reward = (days * REWARD_PER_DAY as f64) as u64;
+
+    // Additional cap: max 30 OURO per claim (prevents gaming)
+    reward.min(30 * REWARD_PER_DAY)
 }
 
 /// Record a heartbeat from a node
@@ -66,11 +78,14 @@ pub async fn record_heartbeat(
 
     // Update heartbeat
     let now = Utc::now();
-    let secs_since_last = (now - heartbeat.last_heartbeat).num_seconds() as u64;
+    let duration = now.signed_duration_since(heartbeat.last_heartbeat);
+    // Clamp to non-negative (handles clock going backward)
+    let secs_since_last = duration.num_seconds().max(0) as u64;
 
     // Only count uptime if heartbeat is within 5 minutes (prevent gaming)
     if secs_since_last < 300 {
-        heartbeat.total_uptime_secs += secs_since_last;
+        // Use saturating add to prevent overflow
+        heartbeat.total_uptime_secs = heartbeat.total_uptime_secs.saturating_add(secs_since_last);
     }
 
     heartbeat.last_heartbeat = now;
@@ -96,7 +111,8 @@ pub async fn claim_rewards(db: &RocksDb, node_id: &str) -> Result<(String, u64),
 
     // Check minimum uptime
     let now = Utc::now();
-    let secs_since_claim = (now - heartbeat.last_reward_claim).num_seconds() as u64;
+    let duration = now.signed_duration_since(heartbeat.last_reward_claim);
+    let secs_since_claim = duration.num_seconds().max(0) as u64;
 
     if secs_since_claim < MIN_UPTIME_SECS {
         return Err(format!(

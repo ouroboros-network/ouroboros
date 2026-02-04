@@ -86,16 +86,13 @@ static METRICS_PEER_COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0))
 /// HYBRID ARCHITECTURE: Mix of server nodes + community P2P nodes
 /// These are fallback nodes used when BOOTSTRAP_PEERS/BOOTSTRAP_URLS env var is not set
 const DEFAULT_BOOTSTRAP_NODES: &[&str] = &[
-    // Official seed servers (when available - add domains when you deploy)
-    // "seed1.ouroboros.network:9001",
-    // "seed2.ouroboros.network:9001",
+    // Primary seed nodes (GCP infrastructure)
+    "136.112.101.176:9000",  // US seed node
+    "34.57.121.217:9000",    // GCP full node
 
-    // Community-run nodes (volunteers can add their addresses here)
-    // "community-node-1.example.com:9001",
-
-    // For testing: localhost nodes (remove in production)
-    // "127.0.0.1:9002",
-    // "127.0.0.1:9003",
+    // Backup seed nodes (add more as network grows)
+    // "seed2.ouroboros.network:9000",
+    // "seed3.ouroboros.network:9000",
 ];
 
 /// Fetch peers from multiple bootstrap sources
