@@ -38,12 +38,26 @@ docker run -d \
   ouroboros-node
 ```
 
-### Option 3: Pre-built Image (Coming Soon)
+### Option 3: Pre-built Image
 
 ```bash
+# Pull the latest image
 docker pull ghcr.io/ouroboros-network/ouroboros:latest
-docker run -d -p 8000:8000 -p 9000:9000 ghcr.io/ouroboros-network/ouroboros:latest
+
+# Run the node
+docker run -d \
+  --name ouroboros-node \
+  -p 8000:8000 \
+  -p 9000:9000 \
+  -v ouroboros-data:/data \
+  -e PEER_ADDRS=136.112.101.176:9000,34.57.121.217:9000 \
+  ghcr.io/ouroboros-network/ouroboros:latest
 ```
+
+Available tags:
+- `latest` - Latest stable release
+- `main` - Latest from main branch
+- `v0.4.1` - Specific version
 
 ## Configuration
 
