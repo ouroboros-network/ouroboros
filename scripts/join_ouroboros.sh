@@ -25,6 +25,18 @@ case "$OS" in
             *)
                 echo "Unsupported architecture: $ARCH"
                 echo "Supported: x86_64, aarch64 (ARM64)"
+                echo ""
+                echo "Manual install for x86_64:"
+                echo "  mkdir -p ~/.ouroboros/data"
+                echo "  curl -L https://github.com/ouroboros-network/ouroboros/releases/download/v0.4.1/ouro_dag-linux-x64 -o ~/.ouroboros/ouro-bin"
+                echo "  chmod +x ~/.ouroboros/ouro-bin"
+                echo "  ~/.ouroboros/ouro-bin start"
+                echo ""
+                echo "Manual install for ARM64:"
+                echo "  mkdir -p ~/.ouroboros/data"
+                echo "  curl -L https://github.com/ouroboros-network/ouroboros/releases/download/v0.4.1/ouro_dag-linux-arm64 -o ~/.ouroboros/ouro-bin"
+                echo "  chmod +x ~/.ouroboros/ouro-bin"
+                echo "  ~/.ouroboros/ouro-bin start"
                 exit 1
                 ;;
         esac
@@ -36,6 +48,18 @@ case "$OS" in
             *)
                 echo "Unsupported architecture: $ARCH"
                 echo "Supported: x86_64, arm64 (Apple Silicon M1/M2/M3)"
+                echo ""
+                echo "Manual install for Apple Silicon:"
+                echo "  mkdir -p ~/.ouroboros/data"
+                echo "  curl -L https://github.com/ouroboros-network/ouroboros/releases/download/v0.4.1/ouro_dag-macos-arm64 -o ~/.ouroboros/ouro-bin"
+                echo "  chmod +x ~/.ouroboros/ouro-bin"
+                echo "  ~/.ouroboros/ouro-bin start"
+                echo ""
+                echo "Manual install for Intel Mac:"
+                echo "  mkdir -p ~/.ouroboros/data"
+                echo "  curl -L https://github.com/ouroboros-network/ouroboros/releases/download/v0.4.1/ouro_dag-macos-x64 -o ~/.ouroboros/ouro-bin"
+                echo "  chmod +x ~/.ouroboros/ouro-bin"
+                echo "  ~/.ouroboros/ouro-bin start"
                 exit 1
                 ;;
         esac
