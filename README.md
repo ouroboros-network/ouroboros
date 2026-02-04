@@ -80,7 +80,7 @@ cargo run --release -- --node-url http://34.57.121.217:8000 send <recipient> <am
 Ouroboros is a hybrid Byzantine Fault Tolerant (BFT) blockchain that combines:
 
 - **Lightweight nodes**: Run on any device with RocksDB embedded storage
-- **Heavy validators**: Full nodes with PostgreSQL for blockchain history
+- **Full validators**: High-performance nodes with RocksDB for blockchain history
 - **Transparent rewards**: All validator contributions are publicly tracked
 - **Decentralized P2P**: No central authority, fully distributed network
 
@@ -131,7 +131,7 @@ HotStuff BFT consensus with:
 
 | Resource | Link |
 |----------|------|
-| Seed Node | 136.112.101.176:9001 |
+| Seed Node | 136.112.101.176:9000 |
 | API Documentation | [API_DOCUMENTATION.md](API_DOCUMENTATION.md) |
 
 ---
@@ -147,15 +147,16 @@ HotStuff BFT consensus with:
 | Storage | 1GB |
 | OS | Linux, macOS, or Windows |
 
-### Heavy Validator (Server)
+### Full Validator (Server)
 
 | Requirement | Minimum |
 |-------------|---------|
 | CPU | 2+ cores |
 | RAM | 2GB+ |
 | Storage | 10GB+ |
-| Database | PostgreSQL 13+ |
 | OS | Linux (Ubuntu 20.04+ recommended) |
+
+> **Note:** No external database required - RocksDB is embedded in the node binary.
 
 ---
 
