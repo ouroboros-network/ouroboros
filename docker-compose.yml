@@ -1,0 +1,64 @@
+# Ouroboros Node - Docker Compose
+# Run with: docker-compose up -d
+
+version: '3.8'
+
+services:
+  ouroboros-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ouroboros-network/ouroboros:latest
+    container_name: ouroboros-node
+    restart: unless-stopped
+
+    # Port mappings
+    ports:
+      - "8000:8000"  # API (HTTP)
+      - "9000:9000"  # P2P
+
+    # Persistent data volume
+    volumes:
+      - ouroboros-data:/data
+
+    # Environment configuration
+    environment:
+      - ROCKSDB_PATH=/data
+      - API_ADDR=0.0.0.0:8000
+      - LISTEN_ADDR=0.0.0.0:9000
+      - PEER_ADDRS=136.112.101.176:9000,34.57.121.217:9000
+      - RUST_LOG=info
+      - STORAGE_MODE=full
+      # Uncomment and set these for production:
+      # - NODE_WALLET_ADDRESS=your_wallet_address
+      # - API_KEYS=your_api_key
+      # - BFT_SECRET_SEED=your_64_char_hex_seed
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  ouroboros-data:
+    driver: local

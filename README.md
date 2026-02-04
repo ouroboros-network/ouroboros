@@ -38,6 +38,16 @@ curl -L -o %TEMP%\join.bat https://raw.githubusercontent.com/ouroboros-network/o
 
 Download from [Releases](https://github.com/ouroboros-network/ouroboros/releases/latest) and run `ouro-bin.exe join`
 
+### Docker
+
+```bash
+git clone https://github.com/ouroboros-network/ouroboros.git
+cd ouroboros
+docker-compose up -d
+```
+
+See [DOCKER.md](DOCKER.md) for full Docker documentation.
+
 **That's it!** Your node will automatically:
 
 1. Download the lightweight node binary (~19MB)
