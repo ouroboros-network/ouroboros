@@ -52,7 +52,11 @@ Download from [Releases](https://github.com/ouroboros-network/ouroboros/releases
 Use the included Midgard wallet to manage your OURO coins:
 
 ```bash
-cd midgard_wallet
+# Clone the repository (if you haven't already)
+git clone https://github.com/ouroboros-network/ouroboros.git
+cd ouroboros/midgard_wallet
+
+# Build the wallet
 cargo build --release
 
 # Check node status
@@ -66,6 +70,8 @@ cargo run --release -- --node-url http://34.57.121.217:8000 send <recipient> <am
 ```
 
 **Current Node:** http://34.57.121.217:8000 (GCP Full Node)
+
+> **Note:** If you're already running a local node, use `http://localhost:8000` instead.
 
 ---
 
