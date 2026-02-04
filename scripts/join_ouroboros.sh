@@ -20,8 +20,8 @@ ARCH=$(uname -m)
 case "$OS" in
     Linux)
         case "$ARCH" in
-            x86_64)  BINARY_NAME="ouro_dag-linux-x64" ;;
-            aarch64) BINARY_NAME="ouro_dag-linux-arm64" ;;
+            x86_64|amd64)    BINARY_NAME="ouro_dag-linux-x64" ;;
+            aarch64|arm64)   BINARY_NAME="ouro_dag-linux-arm64" ;;
             *)
                 echo "Unsupported architecture: $ARCH"
                 echo "Supported: x86_64, aarch64 (ARM64)"
@@ -31,11 +31,11 @@ case "$OS" in
         ;;
     Darwin)
         case "$ARCH" in
-            x86_64)  BINARY_NAME="ouro_dag-macos-x64" ;;
-            arm64)   BINARY_NAME="ouro_dag-macos-arm64" ;;
+            x86_64|amd64)          BINARY_NAME="ouro_dag-macos-x64" ;;
+            arm64|arm64e|aarch64)  BINARY_NAME="ouro_dag-macos-arm64" ;;
             *)
                 echo "Unsupported architecture: $ARCH"
-                echo "Supported: x86_64, arm64 (Apple Silicon)"
+                echo "Supported: x86_64, arm64 (Apple Silicon M1/M2/M3)"
                 exit 1
                 ;;
         esac
@@ -55,7 +55,7 @@ mkdir -p "$NODE_DIR" "$DATA_DIR"
 
 # Step 1: Download binary
 echo "[1/4] Downloading Ouroboros node..."
-DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/download/v1.1.8/$BINARY_NAME"
+DOWNLOAD_URL="https://github.com/ouroboros-network/ouroboros/releases/download/v0.4.1/$BINARY_NAME"
 
 download_success=false
 
