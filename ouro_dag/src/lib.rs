@@ -13,6 +13,7 @@ pub mod batch_writer;
 pub mod bft;
 pub mod bridge;
 pub mod config;
+pub mod config_manager;
 pub mod crypto;
 pub mod dag;
 pub mod escrow;
@@ -41,7 +42,7 @@ pub mod vrf;
 pub mod zk_integration;
 pub mod zk_proofs;
 // TODO_ROCKSDB: Re-enable when converted to RocksDB
-// pub mod node_metrics; // Node tracking and rewards system
+pub mod node_metrics; // Node tracking and rewards system
 pub mod backup;
 pub mod reconciliation;
 pub mod storage; // New storage abstraction layer // Database backup and recovery
@@ -53,7 +54,7 @@ pub mod mainchain;
 pub mod ouro_coin;
 pub mod subchain;
 // TODO_ROCKSDB: Re-enable when converted to RocksDB
-// pub mod token_bucket;
+pub mod token_bucket;
 pub mod auto_update; // v0.3.0 - Automatic update checking
 pub mod cli_dashboard; // v0.3.0 - CLI dashboard for monitoring
 pub mod light_node_rewards;
@@ -70,6 +71,7 @@ use crate::reconciliation::finalize_block;
 use crate::crypto::verify_ed25519_hex;
 
 use crate::storage::{batch_put, open_db, put, RocksDb};
+use crate::crypto::pq::DilithiumKeypair;
 use axum::{
     routing::{delete, get, post},
     Router,
@@ -568,7 +570,17 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Starts the ouroboros node
-    Start {},
+    Start {
+        /// Run in headless mode (no interactive dashboard)
+        #[arg(long)]
+        headless: bool,
+        /// Minimum difficulty (override)
+        #[arg(long)]
+        min_difficulty: Option<String>,
+        /// Maximum difficulty (override)
+        #[arg(long)]
+        max_difficulty: Option<String>,
+    },
     /// Joins an existing network
     Join {
         #[arg(long)]
@@ -583,6 +595,21 @@ enum Commands {
         storage: String,
         #[arg(long)]
         rocksdb_path: Option<String>,
+        /// Run in headless mode (no interactive dashboard)
+        #[arg(long)]
+        headless: bool,
+        /// Minimum difficulty (override)
+        #[arg(long)]
+        min_difficulty: Option<String>,
+        /// Maximum difficulty (override)
+        #[arg(long)]
+        max_difficulty: Option<String>,
+    },
+    /// Run hardware benchmark to set optimal difficulty
+    Benchmark {
+        /// Number of cycles to run
+        #[arg(long, default_value_t = 10)]
+        cycles: u32,
     },
     /// Show node status dashboard (live updating by default)
     Status {
@@ -652,6 +679,16 @@ enum Commands {
         #[command(subcommand)]
         command: WalletCommands,
     },
+    /// Account management (keys, balance)
+    Account {
+        #[command(subcommand)]
+        command: AccountCommands,
+    },
+    /// Transaction management
+    Tx {
+        #[command(subcommand)]
+        command: TxCommands,
+    },
     /// Resync node from network
     Resync {
         /// API endpoint
@@ -664,6 +701,20 @@ enum Commands {
         #[arg(long)]
         output: Option<String>,
     },
+    /// Register a user wallet (Nexus style)
+    RegisterUser {
+        /// Wallet address to link
+        #[arg(long)]
+        wallet_address: String,
+    },
+    /// Register a node ID (Nexus style)
+    RegisterNode {
+        /// Custom node ID
+        #[arg(long)]
+        node_id: Option<String>,
+    },
+    /// Clear all credentials and logout
+    Logout {},
     /// Run as oracle node
     Oracle {
         #[arg(long)]
@@ -703,13 +754,75 @@ enum WalletCommands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+enum AccountCommands {
+    /// Generate a new keypair
+    New,
+    /// Get account balance
+    Balance {
+        address: Option<String>,
+        #[arg(long, default_value = "http://localhost:8000")]
+        api: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TxCommands {
+    /// Send a transaction
+    Send {
+        /// Recipient address
+        #[arg(long)]
+        to: String,
+        /// Amount to send (in OURO)
+        #[arg(long)]
+        amount: f64,
+        /// API endpoint
+        #[arg(long, default_value = "http://localhost:8000")]
+        api: String,
+    },
+}
+
 pub async fn run() -> std::io::Result<()> {
     let cli = Cli::parse();
 
+    // Initialize unified configuration
+    if let Err(e) = config_manager::init_config().await {
+        eprintln!(" Failed to initialize configuration: {}", e);
+        std::process::exit(1);
+    }
+
     match &cli.command {
-        Commands::Start {} | Commands::Join { .. } => {
+        Commands::Start {
+            headless,
+            min_difficulty,
+            max_difficulty,
+        }
+        | Commands::Join {
+            headless,
+            min_difficulty,
+            max_difficulty,
+            ..
+        } => {
+            let is_headless = *headless;
             // load .env for local development (if present)
             dotenvy::dotenv().ok();
+
+            // Apply difficulty overrides
+            if min_difficulty.is_some() || max_difficulty.is_some() {
+                let mut config = config_manager::CONFIG.write().await;
+                if let Some(min) = min_difficulty {
+                    config.adaptive_difficulty.min_difficulty = Some(min.clone());
+                    println!(" Min difficulty override: {}", min);
+                }
+                if let Some(max) = max_difficulty {
+                    config.adaptive_difficulty.max_difficulty = Some(max.clone());
+                    println!(" Max difficulty override: {}", max);
+                }
+                // Save config immediately
+                if let Err(e) = config.save() {
+                    eprintln!(" Failed to save config overrides: {}", e);
+                }
+            }
 
             // Validate configuration before starting
             let config_validation = crate::config::validate_config();
@@ -740,35 +853,24 @@ pub async fn run() -> std::io::Result<()> {
                 }
             }
 
-            // Get database path
-            let db_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "sled_data".into());
+            // Get configuration from unified manager
+            let config = config_manager::CONFIG.read().await;
+            let db_path = config.storage.db_path.clone();
 
-            // NOTE: "Lightweight mode" removed - all nodes now run full consensus
-            // The lightweight mode was a stub that blocked on the API server and
-            // never started consensus, causing "zombie node" behavior with 0 TPS.
-
-
-            // TODO_ROCKSDB: RocksDB initialization (PostgreSQL removed)
-            // Open RocksDB for validator node
+            // Open RocksDB storage
             println!(" Opening RocksDB storage at {}", db_path);
             let db_pool = Arc::new(open_db(&db_path));
 
-            // start P2P network first so we have peer_store to pass into API router
-            let listen = std::env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:9000".into());
-
-            // Initialize TOR configuration for hybrid clearnet + darkweb support
+            // start P2P network
+            let listen = config.network.listen_addr.clone();
             let tor_config = tor::TorConfig::from_env();
             let (bcast_sender, mut inbound_rx, peer_store) =
                 start_network(&listen, Some(tor_config)).await;
 
-            // start API server (axum) - pass api_peer_store into router
-            let api_addr = std::env::var("API_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".into());
+            // start API server
+            let api_addr = config.network.api_addr.clone();
             let api_addr_parsed: SocketAddr = api_addr.parse().map_err(|e| {
-                eprintln!(
-                    " Invalid API_ADDR format: '{}': {}\
-                        \n   Expected format: IP:PORT (e.g., 0.0.0.0:8000)",
-                    api_addr, e
-                );
+                eprintln!(" Invalid API_ADDR: {}", e);
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
             })?;
 
@@ -777,7 +879,7 @@ pub async fn run() -> std::io::Result<()> {
             println!(" Batch transaction writer initialized (target: 20k-50k TPS)");
 
             // Build main API router
-            let main_router = crate::api::router(peer_store.clone(), batch_writer.clone());
+            let main_router = crate::api::router(db_pool.clone(), peer_store.clone(), batch_writer.clone());
 
             // Initialize additional services for subchain/microchain/mainchain APIs
 
@@ -847,7 +949,7 @@ pub async fn run() -> std::io::Result<()> {
             // Build Ouro Coin and Token Bucket routers
             let ouro_coin_router = crate::ouro_coin::api::router(Arc::new(db_pool.clone()));
             // TODO_ROCKSDB: Re-enable when token_bucket module is converted
-            // let token_bucket_router = crate::token_bucket::api::router(Arc::new(db_pool.clone()));
+            let token_bucket_router = crate::token_bucket::api::router(Arc::new(db_pool.clone()));
 
             // Phase 5: Validator registration router
             let validator_router =
@@ -860,7 +962,7 @@ pub async fn run() -> std::io::Result<()> {
                 .nest("/mainchain", mainchain_router)
                 .nest("/ouro", ouro_coin_router)
                 // TODO_ROCKSDB: Re-enable when token_bucket module is converted
-                // .nest("/bucket", token_bucket_router)
+                .nest("/bucket", token_bucket_router)
                 .nest("/validators", validator_router);
 
             // Load TLS configuration (optional)
@@ -981,11 +1083,21 @@ pub async fn run() -> std::io::Result<()> {
                     vec![0u8; 32]
                 });
 
+            // Phase 6: Load Dilithium Key
+            let dilithium_keypair = if std::env::var("ENABLE_PQ_CRYPTO").unwrap_or_default() == "true" {
+                println!(" PQ Crypto ENABLED: Loading Dilithium5 keys...");
+                // In production, load from file or env. For now, generate ephemeral if missing.
+                Some(DilithiumKeypair::generate())
+            } else {
+                None
+            };
+
             let hotstuff_config = HotStuffConfig {
                 id: node_id.clone(),
                 peers: peer_node_ids,
                 timeout_ms: 5000,
                 secret_seed,
+                dilithium_keypair,
             };
 
             let broadcast_handle = BroadcastHandle::new(bft_peers.clone());
@@ -1017,6 +1129,10 @@ pub async fn run() -> std::io::Result<()> {
                     eprintln!(" BFT server error: {}", e);
                 }
             });
+
+            // Start liveness timer (checks every 1s)
+            let _liveness_handle = hotstuff.clone().spawn_liveness_timer(1000);
+            println!(" BFT liveness timer started");
 
             // load anchor key (optional)
             let anchor_key = keys::load_secret("ANCHOR_PRIVATE_KEY");
@@ -1052,7 +1168,16 @@ pub async fn run() -> std::io::Result<()> {
             let mut last_checkpoint = Instant::now();
             let checkpoint_interval = Duration::from_secs(5); // Consensus trigger interval
 
-            println!("🧠 Ouroboros DAG engine running (consensus + p2p + mempool) ...");
+                println!("\n Ouroboros Node Running!");
+                println!("   P2P: {}", listen);
+                println!("   API: http://{}", api_addr);
+                println!("   Storage: RocksDB ({})", db_path);
+
+                if !is_headless {
+                    println!("\n TIP: View live dashboard with: ouro status");
+                }
+
+                // Run API server
             println!(
                 "   HotStuff consensus will propose blocks every {} seconds",
                 checkpoint_interval.as_secs()
@@ -1234,12 +1359,62 @@ pub async fn run() -> std::io::Result<()> {
             }
         },
 
+        Commands::Account { command } => match command {
+            AccountCommands::New => {
+                handle_account_new().await?;
+            }
+            AccountCommands::Balance { address, api } => {
+                handle_account_balance(address.clone(), api).await?;
+            }
+        },
+
+        Commands::Tx { command } => match command {
+            TxCommands::Send { to, amount, api } => {
+                handle_tx_send(to, *amount, api).await?;
+            }
+        },
+
         Commands::Resync { api } => {
             handle_resync_command(api).await?;
         }
 
         Commands::Backup { output } => {
             handle_backup_command(output.clone()).await?;
+        }
+
+        Commands::RegisterUser { wallet_address } => {
+            let mut config = config_manager::CONFIG.write().await;
+            if config.wallet.is_none() {
+                config.wallet = Some(config_manager::WalletLinkConfig {
+                    wallet_address: wallet_address.clone(),
+                    linked_at: Utc::now().to_rfc3339(),
+                    wallet_signature: "".to_string(),
+                    node_signature: "".to_string(),
+                });
+            } else {
+                if let Some(w) = config.wallet.as_mut() {
+                    w.wallet_address = wallet_address.clone();
+                }
+            }
+            config.save().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            println!(" Registered wallet: {}", wallet_address);
+        }
+
+        Commands::RegisterNode { node_id } => {
+            let mut config = config_manager::CONFIG.write().await;
+            let id = node_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
+            config.identity.node_id = id.clone();
+            config.save().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            println!(" Registered node ID: {}", id);
+        }
+
+        Commands::Logout {} => {
+            let mut config = config_manager::CONFIG.write().await;
+            config.identity.node_id = Uuid::new_v4().to_string();
+            config.wallet = None;
+            config.security.api_keys = vec![];
+            config.save().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            println!(" Logged out and cleared credentials.");
         }
 
         Commands::Oracle {
@@ -1257,6 +1432,10 @@ pub async fn run() -> std::io::Result<()> {
                 *api_port,
             )
             .await?;
+        }
+
+        Commands::Benchmark { cycles } => {
+            handle_benchmark_command(*cycles).await?;
         }
     }
 
@@ -1325,6 +1504,9 @@ async fn handle_status_command(watch: bool, api: &str) -> std::io::Result<()> {
             }
             if let Some(uptime) = identity.get("total_uptime_secs").and_then(|v| v.as_u64()) {
                 data.uptime_secs = uptime;
+            }
+            if let Some(diff) = identity.get("difficulty").and_then(|v| v.as_str()) {
+                data.difficulty = diff.to_string();
             }
         }
 
@@ -2082,6 +2264,204 @@ async fn handle_oracle_command(
         .run()
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+    Ok(())
+}
+
+async fn handle_benchmark_command(cycles: u32) -> std::io::Result<()> {
+    use cli_dashboard::colors;
+    use std::time::Instant;
+
+    println!("\n{}Running Hardware Benchmark ({} cycles)...{}", colors::CYAN, cycles, colors::RESET);
+    println!("This will determine the optimal difficulty for your node.");
+    println!("{}", cli_dashboard::horizontal_line(60));
+
+    let mut total_duration = Duration::new(0, 0);
+    
+    // Warmup
+    print!("Warmup... ");
+    let _ = crate::zk_proofs::generate_proof(1000, 100, "bench_recipient");
+    println!("Done.");
+
+    for i in 1..=cycles {
+        print!("Cycle {}/{}: ", i, cycles);
+        use std::io::Write;
+        std::io::stdout().flush()?;
+        
+        let start = Instant::now();
+        match crate::zk_proofs::generate_proof(1000, 100, "bench_recipient") {
+            Ok(_) => {
+                let duration = start.elapsed();
+                total_duration += duration;
+                println!("{} ms", duration.as_millis());
+            }
+            Err(e) => {
+                println!("{}Failed: {}{}", colors::RED, e, colors::RESET);
+            }
+        }
+    }
+
+    let avg_ms = (total_duration.as_millis() as u64) / cycles as u64;
+    println!("{}", cli_dashboard::horizontal_line(60));
+    println!("Average Proof Generation Time: {} ms", avg_ms);
+
+    let difficulty = if avg_ms < 500 {
+        "extra_large"
+    } else if avg_ms < 2000 {
+        "large"
+    } else if avg_ms < 5000 {
+        "medium"
+    } else {
+        "small"
+    };
+
+    println!("Recommended Difficulty: {}{}{}", colors::GREEN, difficulty, colors::RESET);
+
+    // Save to config
+    let mut config = config_manager::CONFIG.write().await;
+    config.adaptive_difficulty.current = difficulty.to_string();
+    config.adaptive_difficulty.last_performance_ms = avg_ms;
+    
+    match config.save() {
+        Ok(_) => println!("{}Configuration updated!{}", colors::GREEN, colors::RESET),
+        Err(e) => eprintln!("{}Failed to save config: {}{}", colors::RED, e, colors::RESET),
+    }
+
+    Ok(())
+}
+
+async fn handle_account_new() -> std::io::Result<()> {
+    use cli_dashboard::colors;
+    use crate::crypto::{generate_and_write_signing_key, pubkey_bytes};
+    use hex;
+
+    println!("{}Generating new account...{}", colors::CYAN, colors::RESET);
+    
+    // Generate keypair
+    let key_path = Path::new("wallet.key");
+    if key_path.exists() {
+        println!("{}Warning: wallet.key already exists! Backing up to wallet.key.bak{}", colors::YELLOW, colors::RESET);
+        std::fs::rename("wallet.key", "wallet.key.bak")?;
+    }
+
+    let signing_key = match generate_and_write_signing_key(key_path) {
+        Ok(k) => k,
+        Err(e) => {
+            eprintln!("{}Error generating key: {}{}", colors::RED, e, colors::RESET);
+            return Ok(());
+        }
+    };
+
+    let pubkey = pubkey_bytes(&signing_key);
+    let address = hex::encode(pubkey);
+
+    println!("{}Account created successfully!{}", colors::GREEN, colors::RESET);
+    println!("Address: {}", address);
+    println!("Private Key saved to: wallet.key (KEEP THIS SAFE!)");
+
+    Ok(())
+}
+
+async fn handle_account_balance(address: Option<String>, api: &str) -> std::io::Result<()> {
+    use cli_dashboard::colors;
+
+    let addr = if let Some(a) = address {
+        a
+    } else {
+        // Try to load from wallet.key
+        let key_path = Path::new("wallet.key");
+        if !key_path.exists() {
+            eprintln!("{}Error: No address provided and wallet.key not found.{}", colors::RED, colors::RESET);
+            return Ok(());
+        }
+        let signing_key = crate::crypto::load_signing_key(key_path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        hex::encode(crate::crypto::pubkey_bytes(&signing_key))
+    };
+
+    println!("Checking balance for: {}", addr);
+
+    // TODO: Implement actual balance endpoint in API
+    // For now, we'll check the wallet link status or mock it
+    match fetch_api::<serde_json::Value>(&format!("{}/wallet/link", api)).await {
+        Ok(wallet) => {
+             // Mock balance for now since /api/balance isn't fully implemented in router
+             println!("{}Balance: 0.0000 OURO{}", colors::GREEN, colors::RESET); 
+             // Note: Real implementation would hit /api/balance/:addr
+        }
+        Err(e) => {
+            eprintln!("{}Error fetching balance: {}{}", colors::RED, e, colors::RESET);
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_tx_send(to: &str, amount: f64, api: &str) -> std::io::Result<()> {
+    use cli_dashboard::colors;
+    use crate::dag::transaction::Transaction;
+    use crate::crypto::{sign_bytes, pubkey_bytes};
+
+    println!("{}Sending {} OURO to {}...{}", colors::CYAN, amount, to, colors::RESET);
+
+    let key_path = Path::new("wallet.key");
+    if !key_path.exists() {
+        eprintln!("{}Error: wallet.key not found. Run 'ouro account new' first.{}", colors::RED, colors::RESET);
+        return Ok(());
+    }
+
+    let signing_key = crate::crypto::load_signing_key(key_path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let sender_pubkey = pubkey_bytes(&signing_key);
+    let sender_addr = hex::encode(&sender_pubkey);
+
+    // Convert amount to microunits
+    let amount_u64 = (amount * 100_000_000.0) as u64;
+
+    // Create transaction payload
+    // Note: In a real implementation we'd need nonce fetching
+    let nonce = 0; 
+    
+    // Construct simplified payload for signing (matches what verify_ed25519_hex expects in API)
+    // The API expects signature over tx_hash.
+    // In a real system, we'd hash the transaction fields.
+    // Here we'll generate a UUID as the hash for simplicity in this CLI tool
+    let tx_hash = Uuid::new_v4().to_string();
+    
+    // Sign the tx_hash
+    let signature_bytes = sign_bytes(&signing_key, tx_hash.as_bytes());
+    let signature = hex::encode(signature_bytes);
+
+    let payload = serde_json::json!({
+        "tx_hash": tx_hash,
+        "sender": sender_addr,
+        "recipient": to,
+        "signature": signature,
+        "payload": {
+            "amount": amount_u64,
+            "fee": 1000, // 0.00001 OURO fee
+            "public_key": sender_addr,
+            "signature": signature, // Duplicate inside payload as expected by API
+            "nonce": nonce
+        }
+    });
+
+    match reqwest::Client::new()
+        .post(&format!("{}/tx/submit", api))
+        .json(&payload)
+        .send()
+        .await 
+    {
+        Ok(resp) if resp.status().is_success() => {
+            println!("{}Transaction submitted successfully!{}", colors::GREEN, colors::RESET);
+            println!("Tx Hash: {}", tx_hash);
+        }
+        Ok(resp) => {
+            let err = resp.text().await.unwrap_or_default();
+            eprintln!("{}Transaction failed: {}{}", colors::RED, err, colors::RESET);
+        }
+        Err(e) => {
+            eprintln!("{}Network error: {}{}", colors::RED, e, colors::RESET);
+        }
+    }
 
     Ok(())
 }

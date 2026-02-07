@@ -46,6 +46,74 @@ fn prepare_verifying_key() -> PreparedVerifyingKey<Bn254> {
     prepare_verifying_key(&vk)
 }
 
+/// Generate ZK proof for a transaction with adaptive difficulty tracking
+pub fn generate_proof_adaptive(
+    sender_balance: u64,
+    amount: u64,
+    recipient: &str,
+) -> Result<TransactionProof, String> {
+    let start = std::time::Instant::now();
+    
+    let result = generate_proof(sender_balance, amount, recipient);
+    
+    let duration = start.elapsed();
+    let duration_ms = duration.as_millis() as u64;
+
+    // Use a background task or blocking update to adjust difficulty
+    // For simplicity in this synchronous function, we use a thread-safe update if possible
+    // or just log it. Since we want to match Nexus, we update the config.
+    
+    tokio::spawn(async move {
+        let mut config = crate::config_manager::CONFIG.write().await;
+        config.adaptive_difficulty.last_performance_ms = duration_ms;
+        
+        // Simple adaptive logic:
+        // < 500ms -> "extra_large"
+        // < 2s    -> "large"
+        // < 5s    -> "medium"
+        // > 10s   -> "small"
+        let mut new_difficulty = if duration_ms < 500 {
+            "extra_large".to_string()
+        } else if duration_ms < 2000 {
+            "large".to_string()
+        } else if duration_ms < 5000 {
+            "medium".to_string()
+        } else {
+            "small".to_string()
+        };
+
+        // Apply overrides
+        if let Some(ref min) = config.adaptive_difficulty.min_difficulty {
+            // Very simple precedence check (should ideally use an enum with Ord)
+            if difficulty_rank(&new_difficulty) < difficulty_rank(min) {
+                new_difficulty = min.clone();
+            }
+        }
+        
+        if let Some(ref max) = config.adaptive_difficulty.max_difficulty {
+            if difficulty_rank(&new_difficulty) > difficulty_rank(max) {
+                new_difficulty = max.clone();
+            }
+        }
+
+        config.adaptive_difficulty.current = new_difficulty;
+        
+        let _ = config.save();
+    });
+
+    result
+}
+
+fn difficulty_rank(diff: &str) -> u8 {
+    match diff {
+        "extra_large" | "extra_large_4" => 4,
+        "large" => 3,
+        "medium" => 2,
+        "small" => 1,
+        _ => 0,
+    }
+}
+
 /// Generate ZK proof for a transaction
 pub fn generate_proof(
     sender_balance: u64,

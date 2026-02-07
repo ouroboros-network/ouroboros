@@ -37,8 +37,10 @@ impl MicroStore {
     }
 
     pub fn put_header(&self, hdr: &MicroHeader) -> Result<()> {
-        let cf_headers = self.db.cf_handle("headers").unwrap();
-        let cf_by_height = self.db.cf_handle("by_height").unwrap();
+        let cf_headers = self.db.cf_handle("headers")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'headers' not found"))?;
+        let cf_by_height = self.db.cf_handle("by_height")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'by_height' not found"))?;
 
         let key = hdr.id.as_bytes();
         let v = serde_json::to_vec(hdr)?;
@@ -49,7 +51,8 @@ impl MicroStore {
     }
 
     pub fn tip(&self) -> Result<Option<MicroHeader>> {
-        let cf_by_height = self.db.cf_handle("by_height").unwrap();
+        let cf_by_height = self.db.cf_handle("by_height")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'by_height' not found"))?;
         let iter = self
             .db
             .iterator_cf(cf_by_height, rocksdb::IteratorMode::End);
@@ -62,7 +65,8 @@ impl MicroStore {
     }
 
     pub fn get_header(&self, id: &Uuid) -> Result<Option<MicroHeader>> {
-        let cf_headers = self.db.cf_handle("headers").unwrap();
+        let cf_headers = self.db.cf_handle("headers")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'headers' not found"))?;
         match self.db.get_cf(cf_headers, id.as_bytes())? {
             Some(v) => {
                 let h: MicroHeader = serde_json::from_slice(&v)?;

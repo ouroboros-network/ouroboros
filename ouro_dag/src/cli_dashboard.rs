@@ -112,6 +112,7 @@ pub struct DashboardData {
     pub status: NodeStatus,
     pub role: String,
     pub version: String,
+    pub difficulty: String,
     pub uptime_secs: u64,
 
     // Consensus
@@ -198,6 +199,7 @@ impl Default for DashboardData {
             status: NodeStatus::Stopped,
             role: "replica".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
+            difficulty: "small".to_string(),
             uptime_secs: 0,
             view: 0,
             leader: "unknown".to_string(),
@@ -328,13 +330,15 @@ pub fn print_dashboard(data: &DashboardData) {
     );
 
     let status_str = format!(
-        " Status: {}{} {}{} {} Role: {} {} Uptime: {}",
+        " Status: {}{} {}{} {} Role: {} {} Difficulty: {} {} Uptime: {}",
         data.status.color(),
         data.status.symbol(),
         data.status.label(),
         colors::RESET,
         " ".repeat(3),
         data.role,
+        " ".repeat(3),
+        data.difficulty,
         " ".repeat(3),
         format_uptime(data.uptime_secs)
     );

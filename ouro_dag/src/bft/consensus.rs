@@ -235,15 +235,23 @@ pub struct HotStuffConfig {
     pub peers: Vec<NodeId>, // ordered stable list of other nodes
     pub timeout_ms: u64,
     pub secret_seed: Vec<u8>, // 32-byte seed for signing (local only)
+    pub dilithium_keypair: Option<DilithiumKeypair>,
 }
 
 impl HotStuffConfig {
-    pub fn new(id: NodeId, peers: Vec<NodeId>, timeout_ms: u64, secret_seed: Vec<u8>) -> Self {
+    pub fn new(
+        id: NodeId,
+        peers: Vec<NodeId>,
+        timeout_ms: u64,
+        secret_seed: Vec<u8>,
+        dilithium_keypair: Option<DilithiumKeypair>,
+    ) -> Self {
         HotStuffConfig {
             id,
             peers,
             timeout_ms,
             secret_seed,
+            dilithium_keypair,
         }
     }
 }
@@ -333,6 +341,22 @@ impl HotStuff {
             sig: Vec::new(), // Binary signature placeholder
         };
         let payload = proposal_payload_bytes(&prop);
+
+        // Phase 6: Hybrid Signing
+        if let Some(ref dil_key) = self.config.dilithium_keypair {
+            if let Ok(seed_array) = <&[u8; 32]>::try_from(self.config.secret_seed.as_slice()) {
+                let ed_signing = SigningKey::from_bytes(seed_array);
+                let ed_verifying = ed_signing.verifying_key();
+                let hybrid_pair = HybridKeypair::from_keypairs(ed_signing, ed_verifying, dil_key.clone());
+
+                if let Ok(sig) = hybrid_pair.sign(&payload) {
+                    if let Ok(bytes) = bincode::serialize(&sig) {
+                        return hex::encode(bytes);
+                    }
+                }
+            }
+        }
+
         if let Some(sig) = sign_bytes(&self.config.secret_seed, &payload) {
             hex::encode(sig)
         } else {
@@ -378,6 +402,22 @@ impl HotStuff {
             sig: Vec::new(), // Binary signature placeholder
         };
         let payload = vote_payload_bytes(&vote);
+
+        // Phase 6: Hybrid Signing
+        if let Some(ref dil_key) = self.config.dilithium_keypair {
+            if let Ok(seed_array) = <&[u8; 32]>::try_from(self.config.secret_seed.as_slice()) {
+                let ed_signing = SigningKey::from_bytes(seed_array);
+                let ed_verifying = ed_signing.verifying_key();
+                let hybrid_pair = HybridKeypair::from_keypairs(ed_signing, ed_verifying, dil_key.clone());
+
+                if let Ok(sig) = hybrid_pair.sign(&payload) {
+                    if let Ok(bytes) = bincode::serialize(&sig) {
+                        return hex::encode(bytes);
+                    }
+                }
+            }
+        }
+
         if let Some(sig) = sign_bytes(&self.config.secret_seed, &payload) {
             hex::encode(sig)
         } else {
@@ -580,8 +620,6 @@ impl HotStuff {
                     v.voter,
                     e
                 );
-                // TODO: Implement slashing for malformed signatures (indicates malicious validator)
-                // For now, return error instead of silently discarding
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!("Invalid signature format from voter {}", v.voter),
@@ -589,8 +627,34 @@ impl HotStuff {
             }
         };
 
+        // Determine migration phase (Phase 1 for now)
+        // In a real implementation, query blockchain height
+        let phase = MigrationPhase::Phase1EdOrHybrid;
+
+        // Try to parse pubkey as HybridPublicKey first, then fall back to raw Ed25519
+        let (ed_pk, dil_pk) = if let Ok(hybrid_pk) = bincode::deserialize::<crate::crypto::hybrid::HybridPublicKey>(&pubkey_bytes) {
+             let ed = ed25519_dalek::VerifyingKey::from_bytes(
+                 hybrid_pk.ed25519.as_slice().try_into().unwrap_or(&[0u8; 32])
+             ).ok();
+             let dil = crate::crypto::pq::DilithiumPublicKey::from_bytes(hybrid_pk.dilithium).ok();
+             (ed, dil)
+        } else {
+             // Legacy/Ed25519-only pubkey
+             let ed = ed25519_dalek::VerifyingKey::from_bytes(
+                 pubkey_bytes.as_slice().try_into().unwrap_or(&[0u8; 32])
+             ).ok();
+             (ed, None)
+        };
+
         // SECURITY: verify using cryptographic signature verification
-        let ok = crate::crypto::keys::verify_bytes(&pubkey_bytes, &payload, &sig_bytes);
+        let ok = crate::crypto::hybrid::verify_with_migration_policy(
+            &payload,
+            &sig_bytes,
+            ed_pk.as_ref(),
+            dil_pk.as_ref(),
+            &phase
+        ).is_ok();
+
         if !ok {
             log::error!(
  "CRITICAL: SECURITY VIOLATION: Rejecting vote from {} (view: {}, block: {}) - cryptographic signature verification FAILED",

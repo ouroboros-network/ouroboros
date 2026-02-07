@@ -144,6 +144,13 @@ impl ValidatorRegistry {
         self.inner.read().get(id).map(|info| info.pubkey.clone())
     }
 
+    /// Try to parse the validator's public key as a HybridPublicKey
+    /// Returns None if the validator doesn't exist or has a legacy (Ed25519-only) key
+    pub fn get_hybrid_pubkey(&self, id: &str) -> Option<crate::crypto::hybrid::HybridPublicKey> {
+        let pubkey_bytes = self.get(id)?;
+        bincode::deserialize(&pubkey_bytes).ok()
+    }
+
     /// Get validator info with stake
     pub fn get_validator_info(&self, id: &str) -> Option<ValidatorInfo> {
         self.inner.read().get(id).cloned()

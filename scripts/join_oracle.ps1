@@ -62,19 +62,22 @@ try {
 
     Write-Host "Building from source (this will take 15-30 minutes)..." -ForegroundColor Yellow
 
-    # Clone and build
-    Set-Location $env:TEMP
-    if (Test-Path "ouroboros") {
-        Remove-Item -Recurse -Force ouroboros
+    # Clone and build in the install directory (not %TEMP%)
+    $buildDir = "$installDir\_build"
+    if (Test-Path $buildDir) {
+        Remove-Item -Recurse -Force $buildDir
     }
 
-    git clone https://github.com/ouroboros-network/ouroboros.git
-    Set-Location ouroboros\ouro_dag
+    git clone https://github.com/ouroboros-network/ouroboros.git $buildDir
+    Set-Location "$buildDir\ouro_dag"
 
     cargo build --release --bin ouro-node -j 2
 
     Copy-Item "target\release\ouro-node.exe" $outputPath
     Set-Location $installDir
+
+    # Clean up build directory
+    Remove-Item -Recurse -Force $buildDir -ErrorAction SilentlyContinue
 }
 
 Write-Host ""

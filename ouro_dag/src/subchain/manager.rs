@@ -109,8 +109,24 @@ impl SubchainManager {
                     payload.extend_from_slice(&leaf.timestamp.to_be_bytes());
 
                     // query pubkey for microchain
-                    // TODO_ROCKSDB: Query microchain pubkey from RocksDB
-                    let pubkey: Vec<u8> = Vec::new(); // Stub
+                    let security_key = format!("microchain_security:{}", leaf.microchain_id);
+                    let mode: Option<crate::microchain::SecurityMode> = crate::storage::get(self.store.db(), security_key.as_bytes())
+                        .map_err(|e| anyhow::anyhow!("DB error looking up microchain security: {}", e))?;
+
+                    let pubkey_bytes = match mode {
+                        Some(crate::microchain::SecurityMode::SingleOwner { owner_pubkey }) => {
+                            hex::decode(&owner_pubkey).map_err(|_| anyhow::anyhow!("Invalid hex pubkey"))?
+                        },
+                        Some(crate::microchain::SecurityMode::Federated { .. }) => {
+                            return Err(anyhow::anyhow!("Federated security mode not yet supported for batch verification"));
+                        },
+                        None => return Err(anyhow::anyhow!("Microchain {} not found or has no security mode", leaf.microchain_id)),
+                    };
+
+                    // verify signature
+                    if !verify_bytes(&pubkey_bytes, &leaf.sig_micro, &payload) {
+                         return Err(anyhow::anyhow!("Invalid signature for microchain {}", leaf.microchain_id));
+                    }
                 }
             }
         }

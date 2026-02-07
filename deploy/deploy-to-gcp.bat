@@ -49,7 +49,7 @@ echo docker rm ouro-node 2^>/dev/null ^|^| true
 echo docker run -d --name ouro-node --restart unless-stopped -p 8000:8000 -p 9000:9000 -v /mnt/disks/data:/data -e ROCKSDB_PATH=/data/rocksdb -e RUST_LOG=info ouroboros-node
 echo echo "Node started!"
 echo docker logs ouro-node
-) > %TEMP%\startup-script.sh
+) > %USERPROFILE%\.ouroboros\startup-script.sh
 
 REM Create instance
 echo Creating compute instance...
@@ -61,7 +61,7 @@ gcloud compute instances create %INSTANCE_NAME% ^
     --boot-disk-size=30GB ^
     --boot-disk-type=pd-standard ^
     --disk=name=%INSTANCE_NAME%-data,mode=rw ^
-    --metadata-from-file=startup-script=%TEMP%\startup-script.sh ^
+    --metadata-from-file=startup-script=%USERPROFILE%\.ouroboros\startup-script.sh ^
     --tags=ouro-node ^
     --scopes=cloud-platform
 

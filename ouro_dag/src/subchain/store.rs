@@ -30,6 +30,11 @@ pub struct SubStore {
 }
 
 impl SubStore {
+    /// Get a reference to the underlying database
+    pub fn db(&self) -> &Arc<DB> {
+        &self.db
+    }
+
     pub fn open(name: &str) -> Result<Self> {
         let base_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "rocksdb_data".into());
         // Use sibling path, not nested subdirectory
@@ -55,8 +60,10 @@ impl SubStore {
     }
 
     pub fn put_header(&self, hdr: &SubBlockHeader) -> Result<()> {
-        let cf_headers = self.db.cf_handle("headers").unwrap();
-        let cf_by_height = self.db.cf_handle("by_height").unwrap();
+        let cf_headers = self.db.cf_handle("headers")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'headers' not found"))?;
+        let cf_by_height = self.db.cf_handle("by_height")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'by_height' not found"))?;
 
         let key = hdr.id.as_bytes();
         let v = serde_json::to_vec(hdr)?;
@@ -67,7 +74,8 @@ impl SubStore {
     }
 
     pub fn tip(&self) -> Result<Option<SubBlockHeader>> {
-        let cf_by_height = self.db.cf_handle("by_height").unwrap();
+        let cf_by_height = self.db.cf_handle("by_height")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'by_height' not found"))?;
         let iter = self
             .db
             .iterator_cf(cf_by_height, rocksdb::IteratorMode::End);
@@ -80,7 +88,8 @@ impl SubStore {
     }
 
     pub fn get_header(&self, id: &Uuid) -> Result<Option<SubBlockHeader>> {
-        let cf_headers = self.db.cf_handle("headers").unwrap();
+        let cf_headers = self.db.cf_handle("headers")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'headers' not found"))?;
         match self.db.get_cf(cf_headers, id.as_bytes())? {
             Some(v) => {
                 let h: SubBlockHeader = serde_json::from_slice(&v)?;
@@ -91,7 +100,8 @@ impl SubStore {
     }
 
     pub fn put_batch(&self, root: &[u8], rec: &BatchRecord) -> Result<()> {
-        let cf_batches = self.db.cf_handle("batches").unwrap();
+        let cf_batches = self.db.cf_handle("batches")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'batches' not found"))?;
         let key = root;
         let v = serde_json::to_vec(rec)?;
         self.db.put_cf(cf_batches, key, v)?;
@@ -99,7 +109,8 @@ impl SubStore {
     }
 
     pub fn get_batch(&self, root: &[u8]) -> Result<Option<BatchRecord>> {
-        let cf_batches = self.db.cf_handle("batches").unwrap();
+        let cf_batches = self.db.cf_handle("batches")
+            .ok_or_else(|| anyhow::anyhow!("Column family 'batches' not found"))?;
         match self.db.get_cf(cf_batches, root)? {
             Some(v) => {
                 let b: BatchRecord = serde_json::from_slice(&v)?;

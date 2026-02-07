@@ -1162,6 +1162,7 @@ async fn submit_heartbeat(
 /// Claim rewards for a node
 async fn claim_rewards(
     Extension(db): Extension<RocksDb>,
+    Extension(batch_writer): Extension<Arc<crate::batch_writer::BatchWriter>>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, ApiError> {
     let node_id = payload
@@ -1173,15 +1174,40 @@ async fn claim_rewards(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to claim rewards: {}", e)))?;
 
-    // TODO: Create a transaction to mint/transfer the reward
-    // For now, just return the reward information
+    // Create reward transaction (Minting)
+    let tx_id = Uuid::new_v4();
+    let pending_tx = crate::batch_writer::PendingTransaction {
+        tx_id,
+        tx_hash: format!("reward-{}-{}", node_id, tx_id),
+        sender: "system".to_string(), // System address
+        recipient: wallet_address.clone(),
+        amount: reward_amount,
+        fee: 0,
+        payload: serde_json::json!({
+            "type": "block_reward",
+            "node_id": node_id,
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }),
+        signature: Some("system_verified".to_string()), // Special marker for system txs
+        public_key: "system".to_string(),
+    };
+
+    // Submit to batch writer
+    if let Err(e) = batch_writer.submit(pending_tx).await {
+        error!("Failed to queue reward transaction: {}", e);
+        return Err(ApiError::Internal("Failed to queue reward transaction".to_string()));
+    }
+
+    info!("Minted {} OURO reward for {}", reward_amount, wallet_address);
+
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
             "status": "ok",
             "wallet_address": wallet_address,
             "reward_amount": reward_amount,
-            "message": "Reward claimed successfully"
+            "tx_id": tx_id.to_string(),
+            "message": "Reward claimed and transaction queued"
         })),
     ))
 }
@@ -1195,7 +1221,7 @@ async fn get_node_stats(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get node stats: {}", e)))?;
 
-    let pending_rewards = crate::rewards::calculate_pending_rewards(&stats);
+    let pending_rewards = crate::rewards::calculate_pending_rewards(&stats, 1.0);
 
     Ok((
         StatusCode::OK,
@@ -1243,9 +1269,8 @@ async fn get_resources() -> impl IntoResponse {
     // Get disk usage for data directory
     let (disk_used_gb, disk_total_gb) = get_disk_usage();
 
-    // CPU requires sampling over time - return 0 for now
-    // A proper implementation would sample /proc/stat or use sysinfo crate
-    let cpu_pct = 0.0f64;
+    // Use sampled CPU from metrics
+    let cpu_pct = METRICS.cpu_usage.load(std::sync::atomic::Ordering::Relaxed) as f64;
 
     Json(serde_json::json!({
         "cpu_pct": cpu_pct,
@@ -1255,6 +1280,20 @@ async fn get_resources() -> impl IntoResponse {
         "net_in_kbps": 0.0,
         "net_out_kbps": 0.0,
         "uptime_secs": METRICS.uptime_secs()
+    }))
+}
+
+/// Get node identity and configuration
+async fn get_identity() -> impl IntoResponse {
+    METRICS.inc_http_requests();
+    let config = crate::config_manager::CONFIG.read().await;
+    
+    Json(serde_json::json!({
+        "node_id": config.identity.node_id,
+        "public_name": config.identity.public_name,
+        "total_uptime_secs": config.identity.total_uptime_secs,
+        "difficulty": config.adaptive_difficulty.current,
+        "version": env!("CARGO_PKG_VERSION")
     }))
 }
 
@@ -1403,12 +1442,10 @@ fn get_disk_total_gb(path: &str) -> f64 {
 }
 
 pub fn router(
+    db_pool: Arc<RocksDb>,
     db_peer_store: crate::network::PeerStore,
     batch_writer: Arc<crate::batch_writer::BatchWriter>,
 ) -> Router {
-    // Open RocksDB instance
-    let db_pool = Arc::new(open_db("./data"));
-
     // Initialize rate limiter with configurable limits
     let max_requests = std::env::var("RATE_LIMIT_MAX_REQUESTS")
         .ok()
@@ -1442,7 +1479,8 @@ pub fn router(
         .route("/health/detailed", get(health_detailed))
         .route("/metrics", get(get_metrics)) // Prometheus text format
         .route("/metrics/json", get(get_metrics_json)) // JSON format for dashboard
-        .route("/resources", get(get_resources)); // System resource usage
+        .route("/resources", get(get_resources)) // System resource usage
+        .route("/identity", get(get_identity)); // Node identity and config
 
     // Protected routes with rate limiting and authentication
     // Applies BOTH rate limiting and authentication (layers run bottom to top)

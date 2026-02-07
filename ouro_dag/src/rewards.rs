@@ -41,7 +41,7 @@ impl NodeHeartbeat {
 
 /// Calculate pending rewards for a node
 /// Uses saturating arithmetic to prevent overflow if clock goes backward
-pub fn calculate_pending_rewards(heartbeat: &NodeHeartbeat) -> u64 {
+pub fn calculate_pending_rewards(heartbeat: &NodeHeartbeat, difficulty_multiplier: f64) -> u64 {
     let now = Utc::now();
     let duration = now.signed_duration_since(heartbeat.last_reward_claim);
 
@@ -51,15 +51,16 @@ pub fn calculate_pending_rewards(heartbeat: &NodeHeartbeat) -> u64 {
     // Cap maximum claimable time to 30 days to prevent abuse
     let capped_secs = secs_since_claim.min(30 * 86400);
 
-    // Reward = (seconds_online / 86400) * REWARD_PER_DAY
+    // Reward = (seconds_online / 86400) * REWARD_PER_DAY * multiplier
     // 86400 = seconds in a day
     let days = capped_secs as f64 / 86400.0;
 
     // Use saturating conversion to prevent overflow
-    let reward = (days * REWARD_PER_DAY as f64) as u64;
+    let base_reward = days * REWARD_PER_DAY as f64;
+    let reward = (base_reward * difficulty_multiplier) as u64;
 
-    // Additional cap: max 30 OURO per claim (prevents gaming)
-    reward.min(30 * REWARD_PER_DAY)
+    // Additional cap: max 30 OURO * multiplier per claim (prevents gaming)
+    reward.min((30.0 * REWARD_PER_DAY as f64 * difficulty_multiplier) as u64)
 }
 
 /// Record a heartbeat from a node
@@ -106,8 +107,17 @@ pub async fn claim_rewards(db: &RocksDb, node_id: &str) -> Result<(String, u64),
         None => return Err("Node not found".to_string()),
     };
 
+    // Determine multiplier based on difficulty
+    let config = crate::config_manager::CONFIG.read().await;
+    let multiplier = match config.adaptive_difficulty.current.as_str() {
+        "extra_large" | "extra_large_4" => 8.0,
+        "large" => 4.0,
+        "medium" => 2.0,
+        _ => 1.0,
+    };
+
     // Calculate pending rewards
-    let reward_amount = calculate_pending_rewards(&heartbeat);
+    let reward_amount = calculate_pending_rewards(&heartbeat, multiplier);
 
     // Check minimum uptime
     let now = Utc::now();
