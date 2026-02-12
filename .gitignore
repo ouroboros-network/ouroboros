@@ -1,0 +1,93 @@
+# Build artifacts
+target/
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+*.wasm
+
+# Cargo files
+Cargo.lock
+
+# Database and data files
+sled_data/
+rocksdb_data*/
+*.db/
+node*_data/
+test_data/
+fresh_test_node/
+ouro_dag/data/
+dag_state.json
+
+# Environment and config files with secrets
+.env
+.env.*
+!.env.example
+api_keys.json
+oracle_config.json
+*.pem
+*.key
+*.pub
+migration_signing.*
+peers.json
+
+# Logs
+*.log
+nul
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node.js
+node_modules/
+
+# Test outputs
+benchmark_*.txt
+test_output.log
+
+# Temporary files
+*.bak
+*.tmp
+
+# Archives
+*.tar.gz
+*.zip
+
+# Claude Code settings
+.claude/
+
+# Internal documentation
+SESSION_PROGRESS_SUMMARY.md
+POSTGRESQL_TO_ROCKSDB_CONVERSION_STATUS.md
+V0.3.0_ROADMAP.md
+
+# Source code (private — only binaries are distributed)
+ouro_dag/
+midgard_wallet/
+ouro_sdk/
+ouro_sdk_js/
+ouro_sdk_python/
+contract_templates/
+examples/
+docs/
+Dockerfile
+docker-compose.yml
+DOCKER.md
+DEVELOPER_GUIDE.md
+API_DOCUMENTATION.md
+requirements.txt

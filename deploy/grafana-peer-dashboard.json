@@ -1,0 +1,146 @@
+{
+  "dashboard": {
+    "title": "Ouroboros Network Monitor",
+    "tags": ["ouroboros", "p2p", "network"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active P2P Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [{
+          "expr": "peer_connections_active",
+          "legendFormat": "Active Connections"
+        }],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Total Known Peers",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [{
+          "expr": "peer_count_total",
+          "legendFormat": "Total Peers"
+        }],
+        "yaxes": [
+          {"format": "short", "label": "Peers"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Current Connection Count",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+        "targets": [{
+          "expr": "peer_connections_active"
+        }],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 1, "color": "yellow"},
+                {"value": 5, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Total Peers",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+        "targets": [{
+          "expr": "peer_count_total"
+        }],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 5,
+        "title": "HTTP Requests",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+        "targets": [{
+          "expr": "http_requests_total"
+        }],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 6,
+        "title": "Consensus Rounds",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+        "targets": [{
+          "expr": "consensus_rounds_total"
+        }],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 7,
+        "title": "Message Dedupe Cache",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 12},
+        "targets": [{
+          "expr": "message_dedupe_entries",
+          "legendFormat": "Dedupe Entries"
+        }],
+        "yaxes": [
+          {"format": "short", "label": "Entries"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "HTTP Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
+        "targets": [{
+          "expr": "rate(http_errors_total[5m])",
+          "legendFormat": "Errors/sec"
+        }],
+        "yaxes": [
+          {"format": "short", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 18},
+        "targets": [{
+          "expr": "rate(http_requests_total[5m])",
+          "legendFormat": "Requests/sec"
+        }],
+        "yaxes": [
+          {"format": "short", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      }
+    ],
+    "refresh": "5s",
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {"refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]}
+  }
+}

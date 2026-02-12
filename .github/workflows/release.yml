@@ -1,0 +1,128 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev llvm-dev
+      - name: Build
+        run: |
+          cd ouro_dag
+          cargo build --release --bin ouro
+      - name: Package
+        run: |
+          cd ouro_dag/target/release
+          cp ouro ouro-linux-x64
+          chmod +x ouro-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ouro-linux-x64
+          path: ouro_dag/target/release/ouro-linux-x64
+
+  build-macos-x64:
+    runs-on: macos-14  # Cross-compile from ARM64 Mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - name: Build for x64
+        run: |
+          cd ouro_dag
+          cargo build --release --bin ouro --target x86_64-apple-darwin
+      - name: Package
+        run: |
+          cd ouro_dag/target/x86_64-apple-darwin/release
+          cp ouro ouro-macos-x64
+          chmod +x ouro-macos-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ouro-macos-x64
+          path: ouro_dag/target/x86_64-apple-darwin/release/ouro-macos-x64
+
+  build-macos-arm64:
+    runs-on: macos-14  # Apple Silicon Mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: |
+          cd ouro_dag
+          cargo build --release --bin ouro
+      - name: Package
+        run: |
+          cd ouro_dag/target/release
+          cp ouro ouro-macos-arm64
+          chmod +x ouro-macos-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ouro-macos-arm64
+          path: ouro_dag/target/release/ouro-macos-arm64
+
+  build-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install LLVM
+        run: choco install llvm -y
+      - name: Build
+        run: |
+          cd ouro_dag
+          cargo build --release --bin ouro
+      - name: Package
+        run: |
+          cd ouro_dag/target/release
+          copy ouro.exe ouro-windows-x64.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ouro-windows-x64
+          path: ouro_dag/target/release/ouro-windows-x64.exe
+
+  release:
+    needs: [build-linux-x64, build-macos-x64, build-macos-arm64, build-windows-x64]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/ouro-linux-x64/ouro-linux-x64
+            artifacts/ouro-macos-x64/ouro-macos-x64
+            artifacts/ouro-macos-arm64/ouro-macos-arm64
+            artifacts/ouro-windows-x64/ouro-windows-x64.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

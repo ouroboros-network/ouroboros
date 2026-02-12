@@ -1,0 +1,25 @@
+version: "3.8"
+
+# This extends docker-compose.yml to add nginx load balancer
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: ouro_nginx
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/certs:/etc/nginx/certs:ro
+    depends_on:
+      - node1
+      - node2
+    restart: unless-stopped
+    networks:
+      - ouro_net
+
+networks:
+  ouro_net:
+    external: true
