@@ -79,8 +79,6 @@ V0.3.0_ROADMAP.md
 # Source code (private — only binaries are distributed)
 ouro_dag/
 midgard_wallet/
-ouro_sdk/
-ouro_sdk_js/
 ouro_sdk_python/
 contract_templates/
 examples/
