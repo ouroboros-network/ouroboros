@@ -71,18 +71,48 @@ if ($existingProcess) {
     $nodePid = $existingProcess.Id
     Write-Host "      Stopping existing node (PID: $nodePid)..." -ForegroundColor Gray
 
-    # Try Stop-Process first, fall back to taskkill
-    try {
-        $existingProcess | Stop-Process -Force -ErrorAction Stop
-    } catch {
-        Write-Host "      Stop-Process failed, trying taskkill..." -ForegroundColor Yellow
-        & "$env:SystemRoot\System32\taskkill.exe" /F /PID $nodePid 2>$null | Out-Null
-    }
-    Start-Sleep -Seconds 2
+    $stopped = $false
 
-    # Verify the process actually stopped
-    $stillRunning = Get-Process -Id $nodePid -ErrorAction SilentlyContinue
-    if ($stillRunning) {
+    # Method 1: Graceful API shutdown (works without admin privileges)
+    if (Test-Path $envFile) {
+        $apiKey = $null
+        $apiAddr = "127.0.0.1:8000"
+        Get-Content $envFile | ForEach-Object {
+            if ($_ -match "^API_KEYS=(.+)$") { $apiKey = ($matches[1].Trim() -split ",")[0] }
+            if ($_ -match "^API_ADDR=(.+)$") { $apiAddr = $matches[1].Trim().Replace("0.0.0.0", "127.0.0.1") }
+        }
+        if ($apiKey) {
+            try {
+                $ProgressPreference = 'SilentlyContinue'
+                $headers = @{ "Authorization" = "Bearer $apiKey" }
+                Invoke-RestMethod -Uri "http://$apiAddr/shutdown" -Method POST -Headers $headers -TimeoutSec 5 -ErrorAction Stop | Out-Null
+                Write-Host "      Graceful shutdown requested." -ForegroundColor Gray
+                Start-Sleep -Seconds 3
+                if (-not (Get-Process -Id $nodePid -ErrorAction SilentlyContinue)) { $stopped = $true }
+            } catch {}
+        }
+    }
+
+    # Method 2: Stop-Process
+    if (-not $stopped) {
+        try {
+            Stop-Process -Id $nodePid -Force -ErrorAction Stop
+            Start-Sleep -Seconds 2
+            if (-not (Get-Process -Id $nodePid -ErrorAction SilentlyContinue)) { $stopped = $true }
+        } catch {}
+    }
+
+    # Method 3: taskkill
+    if (-not $stopped) {
+        Write-Host "      Trying taskkill..." -ForegroundColor Yellow
+        & "$env:SystemRoot\System32\taskkill.exe" /F /PID $nodePid 2>$null | Out-Null
+        Start-Sleep -Seconds 2
+        if (-not (Get-Process -Id $nodePid -ErrorAction SilentlyContinue)) { $stopped = $true }
+    }
+
+    if ($stopped) {
+        Write-Host "      Stopped." -ForegroundColor Gray
+    } else {
         Write-Host ""
         Write-Host "ERROR: Could not stop the running node (PID: $nodePid)." -ForegroundColor Red
         Write-Host "       Please stop it manually or run this script as Administrator:" -ForegroundColor Yellow
@@ -91,7 +121,6 @@ if ($existingProcess) {
         Write-Host ""
         return
     }
-    Write-Host "      Stopped." -ForegroundColor Gray
 } else {
     Write-Host "      No running node found." -ForegroundColor Gray
 }
