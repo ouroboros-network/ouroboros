@@ -292,16 +292,12 @@ Start-Sleep -Seconds 5
 $ouroProcess = Get-Process -Name "ouro-bin" -ErrorAction SilentlyContinue
 
 if ($ouroProcess) {
-    # Get version of running binary
-    $runningVersion = ""
-    try {
-        $vOut = & $binaryPath --version 2>&1
-        if ($vOut -match "(\d+\.\d+\.\d+)") { $runningVersion = "v$($matches[1])" }
-    } catch {}
+    # Use the version we already know (either latest download or existing)
+    $displayVersion = if ($latestVersion) { "v$latestVersion" } elseif ($existingVersion) { "v$existingVersion" } else { "" }
 
     Write-Host ""
     Write-Host "==========================================" -ForegroundColor Green
-    Write-Host "  Node started successfully! $runningVersion" -ForegroundColor Green
+    Write-Host "  Node started successfully! $displayVersion" -ForegroundColor Green
     Write-Host "==========================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  API:  http://localhost:8000" -ForegroundColor Cyan
