@@ -68,9 +68,29 @@ if ($existingVersion -and $latestVersion -and ($existingVersion -eq $latestVersi
 Write-Host "[2/5] Checking for running node..." -ForegroundColor Yellow
 $existingProcess = Get-Process -Name "ouro-bin" -ErrorAction SilentlyContinue
 if ($existingProcess) {
-    Write-Host "      Stopping existing node (PID: $($existingProcess.Id))..." -ForegroundColor Gray
-    $existingProcess | Stop-Process -Force
+    $pid = $existingProcess.Id
+    Write-Host "      Stopping existing node (PID: $pid)..." -ForegroundColor Gray
+
+    # Try Stop-Process first, fall back to taskkill
+    try {
+        $existingProcess | Stop-Process -Force -ErrorAction Stop
+    } catch {
+        Write-Host "      Stop-Process failed, trying taskkill..." -ForegroundColor Yellow
+        & taskkill /F /PID $pid 2>$null | Out-Null
+    }
     Start-Sleep -Seconds 2
+
+    # Verify the process actually stopped
+    $stillRunning = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    if ($stillRunning) {
+        Write-Host ""
+        Write-Host "ERROR: Could not stop the running node (PID: $pid)." -ForegroundColor Red
+        Write-Host "       Please stop it manually or run this script as Administrator:" -ForegroundColor Yellow
+        Write-Host "         taskkill /F /PID $pid" -ForegroundColor Cyan
+        Write-Host "       Then re-run this installer." -ForegroundColor Yellow
+        Write-Host ""
+        return
+    }
     Write-Host "      Stopped." -ForegroundColor Gray
 } else {
     Write-Host "      No running node found." -ForegroundColor Gray
@@ -93,6 +113,13 @@ if ($needsDownload) {
     # Remove old binary before downloading new one
     if (Test-Path $binaryPath) {
         Remove-Item -Force $binaryPath -ErrorAction SilentlyContinue
+        if (Test-Path $binaryPath) {
+            Write-Host ""
+            Write-Host "ERROR: Cannot replace the existing binary (file is locked)." -ForegroundColor Red
+            Write-Host "       Stop the running node first, then re-run this installer." -ForegroundColor Yellow
+            Write-Host ""
+            return
+        }
         Write-Host "      Removed outdated binary." -ForegroundColor Gray
     }
 
