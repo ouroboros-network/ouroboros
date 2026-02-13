@@ -68,25 +68,25 @@ if ($existingVersion -and $latestVersion -and ($existingVersion -eq $latestVersi
 Write-Host "[2/5] Checking for running node..." -ForegroundColor Yellow
 $existingProcess = Get-Process -Name "ouro-bin" -ErrorAction SilentlyContinue
 if ($existingProcess) {
-    $pid = $existingProcess.Id
-    Write-Host "      Stopping existing node (PID: $pid)..." -ForegroundColor Gray
+    $nodePid = $existingProcess.Id
+    Write-Host "      Stopping existing node (PID: $nodePid)..." -ForegroundColor Gray
 
     # Try Stop-Process first, fall back to taskkill
     try {
         $existingProcess | Stop-Process -Force -ErrorAction Stop
     } catch {
         Write-Host "      Stop-Process failed, trying taskkill..." -ForegroundColor Yellow
-        & taskkill /F /PID $pid 2>$null | Out-Null
+        & "$env:SystemRoot\System32\taskkill.exe" /F /PID $nodePid 2>$null | Out-Null
     }
     Start-Sleep -Seconds 2
 
     # Verify the process actually stopped
-    $stillRunning = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    $stillRunning = Get-Process -Id $nodePid -ErrorAction SilentlyContinue
     if ($stillRunning) {
         Write-Host ""
-        Write-Host "ERROR: Could not stop the running node (PID: $pid)." -ForegroundColor Red
+        Write-Host "ERROR: Could not stop the running node (PID: $nodePid)." -ForegroundColor Red
         Write-Host "       Please stop it manually or run this script as Administrator:" -ForegroundColor Yellow
-        Write-Host "         taskkill /F /PID $pid" -ForegroundColor Cyan
+        Write-Host "         taskkill /F /PID $nodePid" -ForegroundColor Cyan
         Write-Host "       Then re-run this installer." -ForegroundColor Yellow
         Write-Host ""
         return
