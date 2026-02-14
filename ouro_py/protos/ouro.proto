@@ -1,0 +1,19 @@
+// Ouroboros Shared Protobuf Definitions
+syntax = "proto3";
+package ouro;
+
+message Transaction {
+    string id = 1;
+    string sender = 2;
+    string recipient = 3;
+    uint64 amount = 4;
+    string signature = 5;
+    string public_key = 6;
+    uint64 nonce = 7;
+}
+
+message Anchor {
+    string microchain_id = 1;
+    bytes state_root = 2;
+    uint64 height = 3;
+}
