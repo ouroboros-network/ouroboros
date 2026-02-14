@@ -336,6 +336,17 @@ if ($currentPath -notlike "*$installDir*") {
     $env:Path = "$installDir;$env:Path"
 }
 
+# Update stale cargo bin copy if it exists (cargo/bin/ouro.exe takes PATH priority)
+$cargoBin = "$env:USERPROFILE\.cargo\bin\ouro.exe"
+if (Test-Path $cargoBin) {
+    try {
+        Copy-Item -Path $binaryPath -Destination $cargoBin -Force
+        Write-Host "      Updated $cargoBin" -ForegroundColor Gray
+    } catch {
+        Write-Host "      Warning: Could not update $cargoBin" -ForegroundColor Yellow
+    }
+}
+
 # Start the node
 $nodeProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$installDir\start-node.bat`"" -WorkingDirectory $installDir -PassThru -WindowStyle Hidden -RedirectStandardOutput "$installDir\node.log" -RedirectStandardError "$installDir\node_error.log"
 
