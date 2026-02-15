@@ -2,300 +2,237 @@
 
 Welcome! This guide will help you join the Ouroboros blockchain network as a node operator.
 
-## What You Need
+## Choose Your Role
 
-- A computer with internet connection
-- **Linux/Mac:** 2GB RAM minimum, 4GB recommended
-- **Windows:** 4GB RAM minimum, 8GB recommended
-- 20GB free disk space
-- Basic terminal/command line knowledge
+Ouroboros uses a three-tier architecture. Pick the role that matches your hardware and goals:
+
+| Tier | Role | Reward | Requirements |
+|------|------|--------|--------------|
+| **Heavy** | BFT consensus, global finality | 1.0x multiplier | 8+ cores, 16GB RAM, 1TB SSD |
+| **Medium** | Subchain aggregation, batch ordering | 0.5x + fees | 4+ cores, 8GB RAM, 500GB SSD, Python 3.10+ |
+| **Light** | App nodes, fraud detection | 0.1x + bounties | Any modern device, Python 3.10+ |
+
+> **Default**: If you don't specify a role, you'll run as a **Heavy** node.
 
 ## Quick Start
 
-### Linux / Mac
+### Linux / macOS
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/install.sh | bash
 ```
 
-Or download and run manually:
+### Windows (PowerShell)
 
-```bash
-wget https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.sh
-chmod +x join_ouroboros.sh
-./join_ouroboros.sh
-```
-
-### Windows
-
-1. **Download PowerShell script:**
-   - Go to: https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.ps1
-   - Right-click → Save As → `join_ouroboros.ps1`
-
-2. **Run as Administrator:**
-   - Right-click PowerShell → "Run as Administrator"
-   - Navigate to download folder
-   - Run: `.\join_ouroboros.ps1`
-
-## Manual Setup (All Platforms)
-
-If you prefer to set up manually:
-
-### 1. Install Dependencies
-
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install -y build-essential pkg-config libssl-dev postgresql postgresql-contrib curl git
-```
-
-**macOS:**
-```bash
-brew install postgresql rust git
-```
-
-**Windows:**
-- Install [Rust](https://rustup.rs/)
-- Install [PostgreSQL](https://www.postgresql.org/download/windows/)
-- Install [Git](https://git-scm.com/download/win)
-
-### 2. Install Rust
-
-**Linux/Mac:**
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
-```
-
-**Windows:** Download from https://rustup.rs/
-
-### 3. Clone Repository
-
-```bash
-git clone https://github.com/ouroboros-network/ouroboros.git
-cd ouroboros/ouro_dag
-```
-
-### 4. Setup Database
-
-**Linux/Mac:**
-```bash
-sudo systemctl start postgresql
-sudo -u postgres psql -c "CREATE USER ouro WITH PASSWORD 'ouro_pass';"
-sudo -u postgres psql -c "CREATE DATABASE ouro_db OWNER ouro;"
-```
-
-**Windows:**
 ```powershell
-psql -U postgres -c "CREATE USER ouro WITH PASSWORD 'ouro_pass';"
-psql -U postgres -c "CREATE DATABASE ouro_db OWNER ouro;"
+irm https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.ps1 | iex
 ```
 
-### 5. Configure Node
+### Windows (Command Prompt)
 
-Create a `.env` file in the `ouro_dag` directory:
+```cmd
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ouroboros-network/ouroboros/main/scripts/join_ouroboros.ps1 | iex"
+```
+
+### Manual Download
+
+Download the latest binary for your platform from [Releases](https://github.com/ouroboros-network/ouroboros/releases/latest):
+
+| Platform | Binary |
+|----------|--------|
+| Linux x64 | `ouro-linux-x64` |
+| macOS x64 (Intel) | `ouro-macos-x64` |
+| macOS ARM64 (Apple Silicon) | `ouro-macos-arm64` |
+| Windows x64 | `ouro-windows-x64.exe` |
 
 ```bash
-NODE_ID=node-YOUR_UNIQUE_ID
-DATABASE_URL=postgres://ouro:ouro_pass@localhost:5432/ouro_db
-ROCKSDB_PATH=/path/to/your/data/rocksdb
-API_ADDR=0.0.0.0:8000
-LISTEN_ADDR=0.0.0.0:9001
-BFT_PORT=9091
-BFT_PEERS=34.173.167.150:9091
-BFT_SECRET_SEED=YOUR_RANDOM_32_BYTE_HEX
-RUST_LOG=info
-ENABLE_UPNP=false
-ENABLE_TOR=false
-API_KEYS=your_api_key
+chmod +x ouro-*          # Linux/macOS only
+./ouro-linux-x64 start   # Replace with your platform binary
 ```
 
-Generate secrets:
-```bash
-# Node ID
-echo "node-$(openssl rand -hex 4)"
+## After Installation
 
-# BFT Secret
-openssl rand -hex 32
-```
-
-### 6. Build the Node
+### Start Your Node
 
 ```bash
-cargo build --release -j 2
+# Start as Heavy node (default)
+ouro start
+
+# Start as Medium node (subchain aggregator)
+ouro start --role medium
+
+# Start as Light node (app runner / watchdog)
+ouro start --role light
+
+# Join with a specific peer
+ouro join --peer 136.112.101.176:9000
 ```
 
-This takes 15-30 minutes depending on your hardware.
-
-### 7. Run Migrations
-
-```bash
-export DATABASE_URL=postgres://ouro:ouro_pass@localhost:5432/ouro_db
-./target/release/migrate
-```
-
-### 8. Start Your Node
-
-**Linux/Mac:**
-```bash
-nohup ./target/release/ouro_dag start > ~/ouro_node.log 2>&1 &
-```
-
-**Windows:**
-```powershell
-Start-Process .\target\release\ouro_dag.exe -ArgumentList "start"
-```
-
-### 9. Verify It's Running
+### Verify It's Running
 
 ```bash
 # Check health
 curl http://localhost:8000/health
+# Should return: {"status":"ok","version":"1.4.1",...}
 
-# Should return: {"status":"ok"}
+# Live dashboard
+ouro status
+
+# Check peers
+ouro peers
+```
+
+### Choose Your Difficulty (Heavy Nodes)
+
+Heavy nodes can select ZK proof difficulty for higher rewards:
+
+```bash
+# Benchmark your hardware first
+ouro benchmark
+
+# Start with custom difficulty range
+ouro start --min-difficulty medium --max-difficulty extra_large
+```
+
+| Difficulty | Reward Multiplier |
+|------------|-------------------|
+| small | 1x (default) |
+| medium | 2x |
+| large | 4x |
+| extra_large | 8x |
+
+## Configuration
+
+Your node config is stored at `~/.ouroboros/config.json`. Key settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| API port | `8000` (Heavy), `8001` (Medium), `8002` (Light) | REST API |
+| P2P port | `9000` | Peer-to-peer networking |
+| Role | `heavy` | Node tier |
+
+### Environment Variables
+
+You can override config with environment variables:
+
+```bash
+NODE_ROLE=medium        # Override node role
+API_ADDR=0.0.0.0:8001  # Custom API address
+API_KEYS=your_key       # API authentication key
+ENABLE_PQ_CRYPTO=true   # Enable post-quantum signatures
 ```
 
 ## Seed Nodes
 
-Connect to these bootstrap nodes:
+Your node will automatically connect to these bootstrap peers:
 
-- `34.173.167.150:9091` (Primary seed node)
+- `136.112.101.176:9000` (Primary seed)
+- `34.57.121.217:9000` (Secondary seed)
 
-## Monitoring Your Node
-
-### Check Logs
-
-**Linux/Mac:**
-```bash
-tail -f ~/ouro_node.log
-```
-
-**Windows:**
-```powershell
-Get-Content $env:USERPROFILE\ouro_node.log -Tail 50 -Wait
-```
-
-### Check if Running
-
-**Linux/Mac:**
-```bash
-ps aux | grep ouro_dag
-```
-
-**Windows:**
-```powershell
-Get-Process ouro_dag
-```
-
-### Check Connectivity
-
-```bash
-# Check API
-curl http://localhost:8000/health
-
-# Check if ports are listening
-netstat -tulpn | grep -E '8001|9001|9091'
-```
+Public API: `http://34.57.121.217:8000`
 
 ## Firewall Configuration
 
-If you want other nodes to connect to you (recommended), open these ports:
+Open these ports if you want other nodes to connect to you (recommended):
 
-- **9001** - P2P networking
-- **9091** - BFT consensus
-- **8001** - API (optional, only if hosting public API)
+- **9000** - P2P networking (required)
+- **8000** - API (optional, for public API hosting)
 
 **Linux (ufw):**
 ```bash
-sudo ufw allow 9001/tcp
-sudo ufw allow 9091/tcp
-```
-
-**Linux (iptables):**
-```bash
-sudo iptables -A INPUT -p tcp --dport 9001 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 9091 -j ACCEPT
+sudo ufw allow 9000/tcp
 ```
 
 **Windows Firewall:**
 ```powershell
-New-NetFirewallRule -DisplayName "Ouroboros P2P" -Direction Inbound -LocalPort 9001 -Protocol TCP -Action Allow
-New-NetFirewallRule -DisplayName "Ouroboros BFT" -Direction Inbound -LocalPort 9091 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "Ouroboros P2P" -Direction Inbound -LocalPort 9000 -Protocol TCP -Action Allow
+```
+
+## Monitoring Your Node
+
+```bash
+# Live dashboard with peer count, consensus, rewards
+ouro status
+
+# One-shot status check
+ouro status --once
+
+# Run diagnostics
+ouro diagnose
+
+# Check consensus state
+ouro consensus
+```
+
+### API Monitoring
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Detailed health with subsystem status
+curl http://localhost:8000/health/detailed
+
+# Performance metrics (Prometheus format)
+curl http://localhost:8000/metrics
+
+# Resource usage
+curl http://localhost:8000/resources
+```
+
+## Earning Rewards
+
+| Action | Heavy | Medium | Light |
+|--------|-------|--------|-------|
+| Block proposals | 20 OURO | 10 OURO | 2 OURO |
+| Block validation | 3 OURO | 1.5 OURO | 0.3 OURO |
+| Network uptime | 1 OURO/day | 0.5 OURO/day | 0.1 OURO/day |
+| Fraud detection | - | - | Bounty |
+
+```bash
+# Check your balance
+ouro account balance
+
+# Claim pending rewards
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8000/rewards/claim -X POST
 ```
 
 ## Troubleshooting
 
 ### Node won't start
 
-1. Check PostgreSQL is running:
-   ```bash
-   sudo systemctl status postgresql
-   ```
+1. Check the error log in your terminal output
+2. Verify ports aren't already in use: `netstat -an | grep 9000`
+3. Try running diagnostics: `ouro diagnose`
 
-2. Check database connection:
-   ```bash
-   psql postgres://ouro:ouro_pass@localhost:5432/ouro_db -c "SELECT 1"
-   ```
+### Can't connect to seed nodes
 
-3. Check logs for errors:
-   ```bash
-   tail -50 ~/ouro_node.log
-   ```
+1. Verify internet connectivity: `ping 136.112.101.176`
+2. Check firewall isn't blocking outbound port 9000
+3. The node will run standalone and retry connections automatically
 
-### Can't connect to seed node
+### Config migration error
 
-1. Verify internet connectivity:
-   ```bash
-   ping 34.173.167.150
-   ```
-
-2. Check if seed node port is reachable:
-   ```bash
-   nc -zv 34.173.167.150 9091
-   ```
-
-3. Check firewall isn't blocking outbound connections
+If upgrading from an older version and seeing `missing field` errors, download the latest release which handles config migration automatically.
 
 ### High CPU usage
 
-This is normal during initial sync. The node will stabilize after syncing completes.
+Normal during initial sync and ZK proof generation. CPU usage stabilizes after sync completes. Use `ouro benchmark` to find optimal difficulty for your hardware.
 
-### Out of disk space
+## Security Notes
 
-The blockchain grows over time. Ensure you have at least 20GB free space initially.
+1. **Keep your private keys safe** - stored in `~/.ouroboros/`
+2. **Never share your `BFT_SECRET_SEED`** - it's your node's identity
+3. **Keep your node updated** - run the install command again to upgrade
+4. **Enable post-quantum mode** for maximum security: `ENABLE_PQ_CRYPTO=true`
+5. **API keys** are required for all state-changing operations
 
 ## Getting Help
 
 - **GitHub Issues:** https://github.com/ouroboros-network/ouroboros/issues
-- **Check seed node status:** `curl http://34.173.167.150:8000/health`
-
-## Contributing
-
-Once your node is running, you're part of the network! You can:
-
-- Run a validator node
-- Help relay transactions
-- Contribute to the codebase
-- Report bugs and suggest improvements
-
-## Network Information
-
-- **Blockchain:** Ouroboros
-- **Consensus:** BFT (Byzantine Fault Tolerant) using HotStuff
-- **Cryptography:** Post-quantum ready (Dilithium, Kyber)
-- **Target TPS:** 20,000 - 50,000 transactions/second
-- **Block Time:** ~2 seconds
-
-## Security Notes
-
-1. **Keep your BFT_SECRET_SEED private** - It's like your node's private key
-2. **Use strong passwords** for PostgreSQL
-3. **Keep your system updated** with security patches
-4. **Monitor your node** regularly
-5. **Backup your data** in `ROCKSDB_PATH` directory
+- **All commands:** `ouro --help`
+- **Role details:** `ouro roles`
 
 ---
 
-**Welcome to the Ouroboros Network!**
-
-Your participation helps make this network more decentralized and resilient.
+**Welcome to the Ouroboros Network!** Your participation strengthens decentralization and earns you OURO coins.
