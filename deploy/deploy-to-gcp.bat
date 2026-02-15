@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo Ouroboros RocksDB Deployment to GCP
+echo Ouroboros Node Deployment to GCP
 echo ==========================================
 echo.
 
@@ -8,12 +8,11 @@ SET PROJECT_ID=ultimate-flame-407206
 SET ZONE=us-central1-a
 SET INSTANCE_NAME=ouro-node-rocksdb
 SET MACHINE_TYPE=e2-medium
-SET OLD_INSTANCE=ouro-node-1
 
 REM Set project
 gcloud config set project %PROJECT_ID%
 
-REM Create persistent disk for RocksDB data
+REM Create persistent disk for data
 echo Creating persistent disk for blockchain data...
 gcloud compute disks create %INSTANCE_NAME%-data --size=50GB --zone=%ZONE% --type=pd-standard 2>nul
 if errorlevel 1 echo Disk may already exist, continuing...
@@ -23,15 +22,13 @@ echo Setting up firewall rules...
 gcloud compute firewall-rules create ouro-p2p --allow=tcp:9000 --description="Ouroboros P2P port" --direction=INGRESS 2>nul
 gcloud compute firewall-rules create ouro-api --allow=tcp:8000 --description="Ouroboros API port" --direction=INGRESS 2>nul
 
-REM Create startup script
+REM Create startup script that downloads prebuilt binary
 echo Creating startup script...
 (
 echo #!/bin/bash
 echo set -e
 echo apt-get update
-echo apt-get install -y docker.io git curl
-echo systemctl start docker
-echo systemctl enable docker
+echo apt-get install -y curl ca-certificates python3 python3-venv
 echo mkdir -p /mnt/disks/data
 echo DEVICE=/dev/disk/by-id/google-%INSTANCE_NAME%-data
 echo if [ -e "$DEVICE" ]; then
@@ -39,16 +36,28 @@ echo   if ! blkid $DEVICE; then mkfs.ext4 -F $DEVICE; fi
 echo   mount -o discard,defaults $DEVICE /mnt/disks/data
 echo   echo "$DEVICE /mnt/disks/data ext4 discard,defaults,nofail 0 2" ^>^> /etc/fstab
 echo fi
-echo cd /opt
-echo git clone https://github.com/ipswyworld/ouroboros.git ^|^| true
-echo cd ouroboros ^&^& git pull
-echo cd ouro_dag
-echo docker build -t ouroboros-node .
-echo docker stop ouro-node 2^>/dev/null ^|^| true
-echo docker rm ouro-node 2^>/dev/null ^|^| true
-echo docker run -d --name ouro-node --restart unless-stopped -p 8000:8000 -p 9000:9000 -v /mnt/disks/data:/data -e ROCKSDB_PATH=/data/rocksdb -e RUST_LOG=info ouroboros-node
+echo REPO="ouroboros-network/ouroboros"
+echo curl -fsSL "https://github.com/$REPO/releases/latest/download/ouro-linux-x64" -o /usr/local/bin/ouro
+echo chmod +x /usr/local/bin/ouro
+echo /usr/local/bin/ouro register-node ^>/dev/null 2^>^&1 ^|^| true
+echo cat ^> /etc/systemd/system/ouroboros.service ^<^< 'SVCEOF'
+echo [Unit]
+echo Description=Ouroboros Blockchain Node
+echo After=network.target
+echo [Service]
+echo Type=simple
+echo Environment="DATABASE_PATH=/mnt/disks/data/rocksdb"
+echo Environment="RUST_LOG=info"
+echo ExecStart=/usr/local/bin/ouro start
+echo Restart=always
+echo RestartSec=10
+echo [Install]
+echo WantedBy=multi-user.target
+echo SVCEOF
+echo systemctl daemon-reload
+echo systemctl enable ouroboros
+echo systemctl start ouroboros
 echo echo "Node started!"
-echo docker logs ouro-node
 ) > %USERPROFILE%\.ouroboros\startup-script.sh
 
 REM Create instance
@@ -79,9 +88,7 @@ echo External IP: %EXTERNAL_IP%
 echo API: http://%EXTERNAL_IP%:8000
 echo P2P: %EXTERNAL_IP%:9000
 echo.
-echo The node is starting up... (may take 2-3 minutes)
-echo.
 echo To check status:
-echo   gcloud compute ssh %INSTANCE_NAME% --zone=%ZONE% --command="docker logs ouro-node"
+echo   gcloud compute ssh %INSTANCE_NAME% --zone=%ZONE% --command="journalctl -u ouroboros --no-pager -n 50"
 echo.
 pause

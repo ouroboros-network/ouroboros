@@ -14,26 +14,10 @@ echo "=========================================="
 echo "Updating system packages..."
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    build-essential \
-    cmake \
-    libsnappy-dev \
-    zlib1g-dev \
-    libbz2-dev \
-    libgflags-dev \
-    liblz4-dev \
-    libzstd-dev \
-    libssl-dev \
-    pkg-config \
     curl \
     ca-certificates \
-    git
-
-# Install Rust
-echo "Installing Rust..."
-if [ ! -d "/root/.cargo" ]; then
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-fi
-source /root/.cargo/env
+    python3 \
+    python3-venv
 
 # Mount data disk
 echo "Setting up data disk..."
@@ -59,22 +43,39 @@ if [ -e "$DEVICE_NAME" ]; then
     fi
 fi
 
-# Clone repository
-echo "Cloning Ouroboros repository..."
-cd /opt
-if [ ! -d "ouroboros" ]; then
-    git clone https://github.com/ouroboros-network/ouroboros.git
-else
-    cd ouroboros
-    git pull origin main
-    cd ..
+# Download prebuilt binary from GitHub releases
+echo "Downloading Ouroboros node binary..."
+REPO="ouroboros-network/ouroboros"
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)       ASSET="ouro-linux-x64" ;;
+    aarch64|arm64) ASSET="ouro-linux-arm64" ;;
+    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+INSTALL_DIR="/usr/local/bin"
+curl -fsSL "https://github.com/$REPO/releases/latest/download/$ASSET" -o "$INSTALL_DIR/ouro"
+chmod +x "$INSTALL_DIR/ouro"
+
+VERSION=$("$INSTALL_DIR/ouro" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+echo "Installed ouro v$VERSION"
+
+# Download Python tier files
+echo "Downloading Python tier files..."
+CONFIG_DIR="/root/.ouroboros"
+PY_DIR="$CONFIG_DIR/ouro_py"
+RAW_BASE="https://raw.githubusercontent.com/$REPO/main"
+mkdir -p "$PY_DIR/ouro_medium" "$PY_DIR/ouro_light"
+curl -sL -o "$PY_DIR/requirements.txt" "$RAW_BASE/ouro_py/requirements.txt" 2>/dev/null || true
+curl -sL -o "$PY_DIR/ouro_medium/main.py" "$RAW_BASE/ouro_py/ouro_medium/main.py" 2>/dev/null || true
+curl -sL -o "$PY_DIR/ouro_light/main.py" "$RAW_BASE/ouro_py/ouro_light/main.py" 2>/dev/null || true
+
+# Initialize node config
+echo "Configuring node..."
+mkdir -p "$CONFIG_DIR"
+if [ ! -f "$CONFIG_DIR/config.json" ]; then
+    "$INSTALL_DIR/ouro" register-node > /dev/null 2>&1 || true
 fi
-
-cd ouroboros/ouro_dag
-
-# Build release binary
-echo "Building Ouroboros node (this will take 20-30 minutes)..."
-cargo build --release --bin ouro_dag
 
 # Create systemd service
 echo "Creating systemd service..."
@@ -86,11 +87,10 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/ouroboros/ouro_dag
-Environment="ROCKSDB_PATH=/mnt/blockchain-data/rocksdb"
+Environment="DATABASE_PATH=/mnt/blockchain-data/rocksdb"
 Environment="RUST_LOG=info"
 Environment="RUST_BACKTRACE=1"
-ExecStart=/opt/ouroboros/ouro_dag/target/release/ouro_dag start
+ExecStart=/usr/local/bin/ouro start
 Restart=always
 RestartSec=10
 

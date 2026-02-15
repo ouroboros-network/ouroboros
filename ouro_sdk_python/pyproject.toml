@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ouroboros-sdk"
+version = "0.3.0"
+description = "Ouroboros Microchain SDK for Python"
+readme = "README.md"
+authors = [
+    { name = "Ouroboros Network", email = "hello@ouroboros.network" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+keywords = ["ouroboros", "blockchain", "microchain", "web3", "dapp", "sdk"]
+
+dependencies = [
+    "requests>=2.31.0",
+    "pynacl>=1.5.0",
+    "typing-extensions>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+    "pylint>=2.17.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ouroboros-network/ouroboros"
+Documentation = "https://docs.ouroboros.network"
+Repository = "https://github.com/ouroboros-network/ouroboros"
+Issues = "https://github.com/ouroboros-network/ouroboros/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ouro_sdk*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pylint.messages_control]
+max-line-length = 100
