@@ -220,6 +220,31 @@ if ($needsDownload) {
     Write-Host "      Skipping download (already up to date)." -ForegroundColor Gray
 }
 
+# --- Step 3b: Download Python tier files (for Medium/Light roles) ---
+$pyDir = "$installDir\ouro_py"
+$pyFiles = @(
+    @{ Remote = "ouro_py/requirements.txt"; Local = "$pyDir\requirements.txt" },
+    @{ Remote = "ouro_py/ouro_medium/main.py"; Local = "$pyDir\ouro_medium\main.py" },
+    @{ Remote = "ouro_py/ouro_light/main.py"; Local = "$pyDir\ouro_light\main.py" }
+)
+$rawBase = "https://raw.githubusercontent.com/$repo/main"
+
+$pyNeedsUpdate = $needsDownload -or -not (Test-Path "$pyDir\ouro_medium\main.py")
+if ($pyNeedsUpdate) {
+    Write-Host "      Downloading Python tier files..." -ForegroundColor Gray
+    foreach ($f in $pyFiles) {
+        $dir = Split-Path $f.Local -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        try {
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri "$rawBase/$($f.Remote)" -OutFile $f.Local -UseBasicParsing -ErrorAction Stop
+        } catch {
+            Write-Host "      Warning: Could not download $($f.Remote)" -ForegroundColor Yellow
+        }
+    }
+    Write-Host "      Python tier files installed." -ForegroundColor Gray
+}
+
 # --- Step 4: Configure node ---
 Write-Host "[4/5] Configuring node..." -ForegroundColor Yellow
 

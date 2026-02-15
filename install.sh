@@ -113,6 +113,19 @@ else
 fi
 [ -d "$TMP_DIR" ] && rm -rf "$TMP_DIR"
 
+# 5b. Download Python tier files (for Medium/Light roles)
+PY_DIR="${CONFIG_DIR}/ouro_py"
+RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
+PY_FILES="ouro_py/requirements.txt ouro_py/ouro_medium/main.py ouro_py/ouro_light/main.py"
+
+echo -e "      Downloading Python tier files..."
+for f in $PY_FILES; do
+    LOCAL_PATH="${CONFIG_DIR}/${f}"
+    mkdir -p "$(dirname "$LOCAL_PATH")"
+    curl -sL -o "$LOCAL_PATH" "${RAW_BASE}/${f}" 2>/dev/null || true
+done
+echo -e "      Python tier files installed."
+
 # 6. Initialize Configuration
 echo -e "[5/5] ${GREEN}Configuring node...${NC}"
 mkdir -p "$CONFIG_DIR"
