@@ -88,4 +88,5 @@ docker-compose.yml
 DOCKER.md
 DEVELOPER_GUIDE.md
 API_DOCUMENTATION.md
-requirements.txt
+# Allow ouro_py/requirements.txt but ignore root-level
+/requirements.txt
