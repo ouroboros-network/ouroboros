@@ -2,12 +2,12 @@ name: Security Scan
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Daily at midnight
+    - cron: '0 0 * * 1'  # Weekly on Monday
   workflow_dispatch:
 
 jobs:
-  dependency-audit:
-    name: Cargo Audit
+  rust-audit:
+    name: Rust Dependency Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +29,29 @@ jobs:
           name: cargo-audit-report
           path: ouro_dag/audit-report.json
 
+  python-audit:
+    name: Python Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Audit Python dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r ouro_py/requirements.txt --format json > python-audit.json
+        continue-on-error: true
+
+      - name: Upload Python audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-audit-report
+          path: python-audit.json
+
   container-scan:
     name: Container Security Scan
     runs-on: ubuntu-latest
@@ -36,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t ouro_node:scan ./ouro_dag
+        run: docker build -t ouro_node:scan .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -62,7 +85,7 @@ jobs:
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   license-check:
     name: License Compliance
