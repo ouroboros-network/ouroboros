@@ -1,0 +1,29 @@
+[package]
+name = "midgard-wallet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+bech32 = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+tokio = { version = "1.42", features = ["full"] }
+bip39 = "2.1"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+dirs = "6.0"
+rand = "0.8"
+sha2 = "0.10"
+anyhow = "1.0"
+colored = "2.1"
+
+# Encryption for secure wallet storage
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+zeroize = { version = "1.7", features = ["derive"] }
+base64 = "0.22"
+rpassword = "7.3"

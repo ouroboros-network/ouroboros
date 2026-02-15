@@ -1,5 +1,6 @@
 #!/bin/bash
-# GCP Deployment Script for Ouroboros RocksDB Edition
+# GCP Deployment Script for Ouroboros Node
+# Downloads prebuilt binary from GitHub releases
 # SECURITY: This script creates firewall rules with IP restrictions
 set -e
 
@@ -7,7 +8,7 @@ PROJECT_ID="ultimate-flame-407206"
 REGION="us-central1"
 ZONE="us-central1-a"
 INSTANCE_NAME="ouro-node-rocksdb"
-MACHINE_TYPE="e2-medium"  # Upgraded from e2-small for better performance
+MACHINE_TYPE="e2-medium"
 IMAGE_FAMILY="debian-12"
 IMAGE_PROJECT="debian-cloud"
 BOOT_DISK_SIZE="30GB"
@@ -25,7 +26,7 @@ ADMIN_IP_RANGES="${ADMIN_IP_RANGES:-}"
 P2P_IP_RANGES="${P2P_IP_RANGES:-0.0.0.0/0}"
 
 echo "=========================================="
-echo "Ouroboros RocksDB Deployment to GCP"
+echo "Ouroboros Node Deployment to GCP"
 echo "=========================================="
 echo "Project: $PROJECT_ID"
 echo "Region: $REGION"
@@ -54,7 +55,7 @@ echo ""
 # Set project
 gcloud config set project $PROJECT_ID
 
-# Create persistent disk for RocksDB data
+# Create persistent disk for data
 echo "Creating persistent disk for blockchain data..."
 gcloud compute disks create ${INSTANCE_NAME}-data \
     --size=$DATA_DISK_SIZE \
@@ -87,63 +88,8 @@ else
     echo "Skipping API firewall rule (no ADMIN_IP_RANGES set)"
 fi
 
-# Create startup script
-cat > /tmp/startup-script.sh << 'EOF'
-#!/bin/bash
-set -e
-
-# Update system
-apt-get update
-apt-get install -y docker.io git curl
-
-# Start Docker
-systemctl start docker
-systemctl enable docker
-
-# Mount data disk
-if ! grep -q "/mnt/disks/data" /etc/fstab; then
-    mkdir -p /mnt/disks/data
-    DEVICE_NAME=$(ls /dev/disk/by-id/google-${INSTANCE_NAME}-data 2>/dev/null || echo "")
-    if [ -n "$DEVICE_NAME" ]; then
-        # Format if needed
-        if ! blkid $DEVICE_NAME; then
-            mkfs.ext4 -F $DEVICE_NAME
-        fi
-        # Mount
-        mount -o discard,defaults $DEVICE_NAME /mnt/disks/data
-        echo "$DEVICE_NAME /mnt/disks/data ext4 discard,defaults,nofail 0 2" >> /etc/fstab
-    fi
-fi
-
-# Clone repository
-cd /opt
-if [ ! -d "ouroboros" ]; then
-    git clone https://github.com/ouroboros-network/ouroboros.git
-fi
-cd ouroboros
-git pull
-
-# Build Docker image
-cd ouro_dag
-docker build -t ouroboros-node .
-
-# Run container
-docker stop ouro-node 2>/dev/null || true
-docker rm ouro-node 2>/dev/null || true
-
-docker run -d \
-    --name ouro-node \
-    --restart unless-stopped \
-    -p 8000:8000 \
-    -p 9000:9000 \
-    -v /mnt/disks/data:/data \
-    -e ROCKSDB_PATH=/data/rocksdb \
-    -e RUST_LOG=info \
-    ouroboros-node
-
-echo "Ouroboros node started successfully!"
-docker logs ouro-node
-EOF
+# Use the standalone startup script
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Create the instance
 echo "Creating compute instance..."
@@ -155,7 +101,7 @@ gcloud compute instances create $INSTANCE_NAME \
     --boot-disk-size=$BOOT_DISK_SIZE \
     --boot-disk-type=pd-standard \
     --disk=name=${INSTANCE_NAME}-data,mode=rw \
-    --metadata-from-file=startup-script=/tmp/startup-script.sh \
+    --metadata-from-file=startup-script="$SCRIPT_DIR/startup-script.sh" \
     --tags=ouro-node \
     --scopes=cloud-platform
 
@@ -180,5 +126,5 @@ echo "To SSH into instance:"
 echo "  gcloud compute ssh $INSTANCE_NAME --zone=$ZONE"
 echo ""
 echo "To view logs:"
-echo "  gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command='docker logs ouro-node'"
+echo "  gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command='journalctl -u ouroboros -f'"
 echo ""
