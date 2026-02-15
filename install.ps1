@@ -92,6 +92,25 @@ if (Test-Path $DestPath) {
 Move-Item -Force $TempPath $DestPath
 Write-Host "      Installed to $DestPath"
 
+# 5b. Download Python tier files (for Medium/Light roles)
+$PyDir = Join-Path $ConfigDir "ouro_py"
+$RawBase = "https://raw.githubusercontent.com/$Repo/main"
+$PyFiles = @(
+    @{ Remote = "ouro_py/requirements.txt"; Local = "$PyDir\requirements.txt" },
+    @{ Remote = "ouro_py/ouro_medium/main.py"; Local = "$PyDir\ouro_medium\main.py" },
+    @{ Remote = "ouro_py/ouro_light/main.py"; Local = "$PyDir\ouro_light\main.py" }
+)
+Write-Host "      Downloading Python tier files..." -ForegroundColor DarkGray
+foreach ($f in $PyFiles) {
+    $dir = Split-Path $f.Local -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    try {
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri "$RawBase/$($f.Remote)" -OutFile $f.Local -UseBasicParsing -ErrorAction Stop
+    } catch {}
+}
+Write-Host "      Python tier files installed." -ForegroundColor DarkGray
+
 # 6. Configure
 Write-Host "[5/5] Configuring node..." -ForegroundColor Green
 if (-not (Test-Path $ConfigDir)) {
