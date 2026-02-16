@@ -19,65 +19,94 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ouro_dag
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libclang-dev llvm-dev
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev llvm-dev
       - name: Build
-        run: |
-          cd ouro_dag
-          cargo build --release --bin ouro
+        run: cd ouro_dag && cargo build --release --bin ouro
       - name: Package
         run: |
-          cd ouro_dag/target/release
-          cp ouro ouro-linux-x64
+          cp ouro_dag/target/release/ouro ouro-linux-x64
           chmod +x ouro-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: ouro-linux-x64
-          path: ouro_dag/target/release/ouro-linux-x64
+          path: ouro-linux-x64
+
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ouro_dag
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libclang-dev llvm-dev
+      - name: Build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
+          AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
+        run: cd ouro_dag && cargo build --release --bin ouro --target aarch64-unknown-linux-gnu
+      - name: Package
+        run: |
+          cp ouro_dag/target/aarch64-unknown-linux-gnu/release/ouro ouro-linux-arm64
+          chmod +x ouro-linux-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ouro-linux-arm64
+          path: ouro-linux-arm64
 
   build-macos-x64:
-    runs-on: macos-14  # Cross-compile from ARM64 Mac
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-apple-darwin
-      - name: Build for x64
-        run: |
-          cd ouro_dag
-          cargo build --release --bin ouro --target x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ouro_dag
+      - name: Build
+        run: cd ouro_dag && cargo build --release --bin ouro --target x86_64-apple-darwin
       - name: Package
         run: |
-          cd ouro_dag/target/x86_64-apple-darwin/release
-          cp ouro ouro-macos-x64
+          cp ouro_dag/target/x86_64-apple-darwin/release/ouro ouro-macos-x64
           chmod +x ouro-macos-x64
       - uses: actions/upload-artifact@v4
         with:
           name: ouro-macos-x64
-          path: ouro_dag/target/x86_64-apple-darwin/release/ouro-macos-x64
+          path: ouro-macos-x64
 
   build-macos-arm64:
-    runs-on: macos-14  # Apple Silicon Mac
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ouro_dag
       - name: Build
-        run: |
-          cd ouro_dag
-          cargo build --release --bin ouro
+        run: cd ouro_dag && cargo build --release --bin ouro
       - name: Package
         run: |
-          cd ouro_dag/target/release
-          cp ouro ouro-macos-arm64
+          cp ouro_dag/target/release/ouro ouro-macos-arm64
           chmod +x ouro-macos-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: ouro-macos-arm64
-          path: ouro_dag/target/release/ouro-macos-arm64
+          path: ouro-macos-arm64
 
   build-windows-x64:
     runs-on: windows-latest
@@ -85,23 +114,22 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ouro_dag
       - name: Install LLVM
         run: choco install llvm -y
       - name: Build
-        run: |
-          cd ouro_dag
-          cargo build --release --bin ouro
+        run: cd ouro_dag && cargo build --release --bin ouro
       - name: Package
-        run: |
-          cd ouro_dag/target/release
-          copy ouro.exe ouro-windows-x64.exe
+        run: copy ouro_dag\target\release\ouro.exe ouro-windows-x64.exe
       - uses: actions/upload-artifact@v4
         with:
           name: ouro-windows-x64
-          path: ouro_dag/target/release/ouro-windows-x64.exe
+          path: ouro-windows-x64.exe
 
   release:
-    needs: [build-linux-x64, build-macos-x64, build-macos-arm64, build-windows-x64]
+    needs: [build-linux-x64, build-linux-arm64, build-macos-x64, build-macos-arm64, build-windows-x64]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -118,6 +146,7 @@ jobs:
         with:
           files: |
             artifacts/ouro-linux-x64/ouro-linux-x64
+            artifacts/ouro-linux-arm64/ouro-linux-arm64
             artifacts/ouro-macos-x64/ouro-macos-x64
             artifacts/ouro-macos-arm64/ouro-macos-arm64
             artifacts/ouro-windows-x64/ouro-windows-x64.exe
