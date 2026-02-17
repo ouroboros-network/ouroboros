@@ -8,7 +8,7 @@ echo.
 
 set "INSTALL_DIR=%USERPROFILE%\.ouroboros"
 set "BINARY=%INSTALL_DIR%\ouro-bin.exe"
-set "DOWNLOAD_URL=https://github.com/ouroboros-network/ouroboros/releases/download/v1.1.8/ouro_dag-windows-x64.exe"
+set "DOWNLOAD_URL=https://github.com/ouroboros-network/ouroboros/releases/latest/download/ouro-windows-x64.exe"
 
 :: Create install directory
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
