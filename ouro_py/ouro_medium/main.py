@@ -10,6 +10,7 @@ Responsibilities:
 """
 
 import asyncio
+import sys
 import os
 import json
 import uuid
@@ -17,6 +18,11 @@ import time
 import logging
 import aiohttp
 from aiohttp import web
+
+# Fix Windows asyncio: ProactorEventLoop raises ConnectionResetError [WinError 10054]
+# on socket cleanup. SelectorEventLoop handles this gracefully.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 from functools import wraps
 
 logging.basicConfig(level=logging.INFO, format="[MediumNode] %(message)s")
