@@ -77,7 +77,7 @@ POSTGRESQL_TO_ROCKSDB_CONVERSION_STATUS.md
 V0.3.0_ROADMAP.md
 
 # Source code (private — only binaries are distributed)
-# ouro_dag/
+ouro_dag/
 contract_templates/
 examples/
 docs/
