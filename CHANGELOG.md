@@ -5,6 +5,19 @@ All notable changes to the Ouroboros project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-02-17
+
+### Fixed
+- **HTTP 500 on subchain endpoints**: Medium node "Advertise failed: HTTP 500" and Light node "Discovery failed: HTTP 500" when calling `/subchain/*` — IDS extension was missing from the combined router
+- **Dashboard flicker/duplication**: `ouro status` rendered multiple stacked dashboards in scrollback buffer — now uses crossterm alternate screen with in-place cursor repositioning
+- **Windows ConnectionResetError**: Python Medium/Light nodes threw `[WinError 10054]` on Windows due to ProactorEventLoop — switched to WindowsSelectorEventLoopPolicy
+- **Install script hardcoded version**: `join_ouroboros.bat` was pinned to v1.1.8 with old binary name — now uses `/releases/latest`
+
+### Changed
+- `ouro_dag/` source is now tracked in git (previously gitignored, only binaries were distributed)
+- CLI dashboard uses `crossterm` crate for terminal management instead of raw ANSI escapes
+- Ctrl+C in `ouro status` now cleanly restores terminal state
+
 ## [1.4.1] - 2026-02-15
 
 ### Fixed
