@@ -1345,8 +1345,12 @@ async fn get_resources() -> impl IntoResponse {
     // Get memory usage
     let mem_mb = get_process_memory_mb();
 
-    // Get disk usage for data directory
-    let (disk_used_gb, disk_total_gb) = get_disk_usage();
+    // Get disk usage for data directory — use config's actual db_path
+    let db_path = {
+        let config = crate::config_manager::CONFIG.read().await;
+        config.storage.db_path.clone()
+    };
+    let (disk_used_gb, disk_total_gb) = get_disk_usage(&db_path);
 
     // Use sampled CPU from metrics
     let cpu_pct = METRICS.cpu_usage.load(std::sync::atomic::Ordering::Relaxed) as f64;
@@ -1372,15 +1376,21 @@ async fn get_resources() -> impl IntoResponse {
 async fn get_identity() -> impl IntoResponse {
     METRICS.inc_http_requests();
     let config = crate::config_manager::CONFIG.read().await;
-    
+
     Json(serde_json::json!({
         "node_id": config.identity.node_id,
         "role": config.role,
         "public_name": config.identity.public_name,
-        "total_uptime_secs": config.identity.total_uptime_secs,
+        "total_uptime_secs": METRICS.uptime_secs(),
         "difficulty": config.adaptive_difficulty.current,
         "version": env!("CARGO_PKG_VERSION")
     }))
+}
+
+/// Get consensus state (view, leader, QC, last committed block)
+async fn get_consensus() -> impl IntoResponse {
+    METRICS.inc_http_requests();
+    Json(METRICS.export_consensus_json())
 }
 
 async fn get_latest_state_proof(
@@ -1462,16 +1472,13 @@ fn get_process_memory_mb() -> u64 {
 }
 
 /// Get disk usage for data directory
-fn get_disk_usage() -> (f64, f64) {
-    // Match the actual db_path used by the node (config_manager default or ROCKSDB_PATH env)
-    let data_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "sled_data".to_string());
-
+fn get_disk_usage(data_path: &str) -> (f64, f64) {
     // Calculate data directory size recursively
-    let used = calculate_dir_size(&data_path) as f64 / 1_073_741_824.0; // Convert to GB
+    let used = calculate_dir_size(data_path) as f64 / 1_073_741_824.0; // Convert to GB
 
     // Get total disk space - use "." as base for relative paths
-    let total_path = if std::path::Path::new(&data_path).is_absolute() {
-        data_path.clone()
+    let total_path = if std::path::Path::new(data_path).is_absolute() {
+        data_path.to_string()
     } else {
         ".".to_string()
     };
@@ -1601,6 +1608,7 @@ pub fn router(
         .route("/metrics/json", get(get_metrics_json)) // JSON format for dashboard
         .route("/resources", get(get_resources)) // System resource usage
         .route("/identity", get(get_identity)) // Node identity and config
+        .route("/consensus", get(get_consensus)) // Consensus state (view, leader, QC)
         .route("/peers", get(get_peers)) // Peer list (read-only)
         .route("/state_proof", get(get_latest_state_proof)) // ZK State Proof
         .route("/network/stats", get(get_network_stats)); // Network stats (read-only)

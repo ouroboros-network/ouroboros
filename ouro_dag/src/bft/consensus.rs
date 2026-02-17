@@ -472,6 +472,13 @@ impl HotStuff {
             nodes[idx].clone()
         };
 
+        // Update metrics with current view and leader
+        {
+            use crate::simple_metrics::METRICS;
+            METRICS.set_view(view);
+            METRICS.set_leader(&proposer);
+        }
+
         if proposer == self.config.id {
             // create a block proposal
             let txs = crate::mempool::select_transactions(200)
@@ -834,6 +841,14 @@ impl HotStuff {
             .await
             .unwrap_or_default();
         let _ = crate::reconciliation::finalize_block(qc.block_id).await;
+
+        // Update metrics with commit info
+        {
+            use crate::simple_metrics::METRICS;
+            let height = qc.view; // view number serves as block height
+            METRICS.record_commit(height);
+            METRICS.set_highest_qc_view(qc.view);
+        }
 
         if let Err(e) = self.start_view().await {
             return Err(Box::new(std::io::Error::new(

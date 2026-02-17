@@ -1657,6 +1657,28 @@ async fn handle_status_loop(watch: bool, api: &str) -> std::io::Result<()> {
             }
         }
 
+        // Fetch consensus state
+        if let Ok(consensus) = fetch_api::<serde_json::Value>(&format!("{}/consensus", api)).await {
+            data.view = consensus.get("view").and_then(|v| v.as_u64()).unwrap_or(0);
+            data.leader = consensus
+                .get("leader")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            data.highest_qc = consensus
+                .get("highest_qc_view")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            if let Some(last) = consensus.get("last_committed") {
+                if let Some(h) = last.get("height").and_then(|v| v.as_u64()) {
+                    data.last_block_height = h;
+                }
+                if let Some(t) = last.get("timestamp").and_then(|v| v.as_str()) {
+                    data.last_block_time = t.to_string();
+                }
+            }
+        }
+
         // Fetch metrics (TPS, block height, etc.) - use JSON endpoint
         if let Ok(metrics) = fetch_api::<serde_json::Value>(&format!("{}/metrics/json", api)).await {
             if let Some(tps) = metrics.get("tps_1m").and_then(|v| v.as_f64()) {
