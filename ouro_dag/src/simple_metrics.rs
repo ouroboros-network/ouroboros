@@ -21,6 +21,14 @@ pub struct SimpleMetrics {
     // Rolling window of transaction timestamps (unix millis)
     tx_timestamps: Arc<Mutex<VecDeque<u64>>>,
     start_time: Instant,
+    // Consensus state (updated by BFT engine)
+    pub current_view: Arc<AtomicU64>,
+    pub highest_qc_view: Arc<AtomicU64>,
+    pub last_commit_height: Arc<AtomicU64>,
+    leader_id: Arc<Mutex<String>>,
+    last_commit_time: Arc<Mutex<String>>,
+    // Network tip (highest block seen from peers)
+    pub network_tip: Arc<AtomicU64>,
 }
 
 /// Get the current process CPU time on Windows using GetProcessTimes.
@@ -136,6 +144,12 @@ impl SimpleMetrics {
             cpu_usage,
             tx_timestamps: Arc::new(Mutex::new(VecDeque::with_capacity(10000))),
             start_time: Instant::now(),
+            current_view: Arc::new(AtomicU64::new(0)),
+            highest_qc_view: Arc::new(AtomicU64::new(0)),
+            last_commit_height: Arc::new(AtomicU64::new(0)),
+            leader_id: Arc::new(Mutex::new("unknown".to_string())),
+            last_commit_time: Arc::new(Mutex::new("N/A".to_string())),
+            network_tip: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -213,12 +227,83 @@ impl SimpleMetrics {
         self.start_time.elapsed().as_secs()
     }
 
+    /// Update consensus view
+    pub fn set_view(&self, view: u64) {
+        self.current_view.store(view, Ordering::Relaxed);
+    }
+
+    /// Update leader ID
+    pub fn set_leader(&self, leader: &str) {
+        *self.leader_id.lock() = leader.to_string();
+    }
+
+    /// Update highest QC view
+    pub fn set_highest_qc_view(&self, view: u64) {
+        self.highest_qc_view.store(view, Ordering::Relaxed);
+    }
+
+    /// Record a committed block
+    pub fn record_commit(&self, height: u64) {
+        self.consensus_rounds.fetch_add(1, Ordering::Relaxed);
+        self.last_commit_height.store(height, Ordering::Relaxed);
+        let secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let h = (secs / 3600) % 24;
+        let m = (secs / 60) % 60;
+        let s = secs % 60;
+        let now = format!("{:02}:{:02}:{:02}", h, m, s);
+        *self.last_commit_time.lock() = now;
+        // Update network tip if our height is higher
+        let current_tip = self.network_tip.load(Ordering::Relaxed);
+        if height > current_tip {
+            self.network_tip.store(height, Ordering::Relaxed);
+        }
+    }
+
+    /// Update network tip (highest block seen from peers)
+    pub fn set_network_tip(&self, tip: u64) {
+        let current = self.network_tip.load(Ordering::Relaxed);
+        if tip > current {
+            self.network_tip.store(tip, Ordering::Relaxed);
+        }
+    }
+
+    /// Export consensus state as JSON
+    pub fn export_consensus_json(&self) -> serde_json::Value {
+        let leader = self.leader_id.lock().clone();
+        let last_time = self.last_commit_time.lock().clone();
+        let view = self.current_view.load(Ordering::Relaxed);
+        let highest_qc = self.highest_qc_view.load(Ordering::Relaxed);
+        let commit_height = self.last_commit_height.load(Ordering::Relaxed);
+
+        serde_json::json!({
+            "view": view,
+            "leader": leader,
+            "highest_qc_view": highest_qc,
+            "last_committed": {
+                "height": commit_height,
+                "timestamp": last_time
+            }
+        })
+    }
+
     /// Export metrics as JSON for the dashboard
     pub fn export_json(&self) -> serde_json::Value {
         let (active_conns, dedupe, peer_count) = crate::network::get_p2p_metrics();
         let tps_1m = self.calculate_tps_1m();
         let tps_5m = self.calculate_tps_5m();
         let mempool_count = crate::mempool::get_mempool_count();
+        let block_height = self.last_commit_height.load(Ordering::Relaxed);
+        let network_tip = self.network_tip.load(Ordering::Relaxed);
+        let sync_percent = if network_tip > 0 {
+            ((block_height as f64 / network_tip as f64) * 100.0).min(100.0)
+        } else if block_height > 0 {
+            100.0 // Producing blocks, no external tip known — we are synced
+        } else {
+            0.0 // No blocks yet
+        };
 
         serde_json::json!({
             "tps_1m": tps_1m,
@@ -232,8 +317,9 @@ impl SimpleMetrics {
             "dedupe_entries": dedupe,
             "uptime_secs": self.uptime_secs(),
             "mempool_count": mempool_count,
-            "block_height": self.consensus_rounds.load(Ordering::Relaxed),
-            "sync_percent": 100.0
+            "block_height": block_height,
+            "network_tip": network_tip,
+            "sync_percent": sync_percent
         })
     }
 
