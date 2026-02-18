@@ -279,7 +279,7 @@ if ($needsNewConfig) {
 
     @"
 # Ouroboros Node Configuration
-DATABASE_PATH=$installDir\data
+ROCKSDB_PATH=$installDir\data
 API_ADDR=0.0.0.0:8000
 LISTEN_ADDR=0.0.0.0:9000
 PEER_ADDRS=$seedNodes

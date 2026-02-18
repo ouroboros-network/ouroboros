@@ -76,7 +76,7 @@ if not exist "%ENV_FILE%" (
 
     (
         echo # Ouroboros Node Configuration
-        echo DATABASE_PATH=%INSTALL_DIR%\data
+        echo ROCKSDB_PATH=%INSTALL_DIR%\data
         echo API_ADDR=0.0.0.0:8000
         echo LISTEN_ADDR=0.0.0.0:9000
         echo PEER_ADDRS=136.112.101.176:9000

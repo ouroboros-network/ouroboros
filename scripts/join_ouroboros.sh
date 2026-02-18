@@ -181,7 +181,7 @@ if [ "$NEEDS_NEW_CONFIG" = true ]; then
 
     cat > "$NODE_DIR/.env" <<EOF
 # Ouroboros Node Configuration
-DATABASE_PATH=$DATA_DIR
+ROCKSDB_PATH=$DATA_DIR
 API_ADDR=0.0.0.0:8000
 LISTEN_ADDR=0.0.0.0:9000
 PEER_ADDRS=$SEED_NODE
