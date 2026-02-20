@@ -1,0 +1,39 @@
+{
+  "name": "ouro-sdk",
+  "version": "1.0.0",
+  "description": "JavaScript SDK for the Ouroboros decentralized blockchain network",
+  "main": "src/index.js",
+  "exports": "./src/index.js",
+  "types": "src/index.d.ts",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/basic.test.js"
+  },
+  "keywords": [
+    "ouroboros",
+    "blockchain",
+    "sdk",
+    "crypto",
+    "hotstuff",
+    "bft",
+    "defi",
+    "web3"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ouroboros-network/ouroboros.git",
+    "directory": "sdk/js"
+  },
+  "homepage": "https://github.com/ouroboros-network/ouroboros",
+  "bugs": {
+    "url": "https://github.com/ouroboros-network/ouroboros/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
