@@ -15,6 +15,8 @@ import os
 import json
 import uuid
 import time
+import hashlib
+import socket
 import logging
 import aiohttp
 from aiohttp import web
@@ -179,15 +181,32 @@ class MediumNode:
         self.heavy_online = False
         self.shadow_mode = True
 
+    async def _detect_public_addr(self) -> str:
+        """Detect our public-facing IP for advertising to peers."""
+        if os.getenv("PUBLIC_ADDR"):
+            return os.getenv("PUBLIC_ADDR")
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
+        except Exception:
+            pass
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+
     async def advertise_to_heavy(self):
         """Periodically registers this aggregator in the Subchain Market."""
+        public_ip = await self._detect_public_addr()
+        log.info(f"Advertising with address: {public_ip}:{self.api_port}")
+
         while True:
             await asyncio.sleep(60)
             if not self.heavy_online:
                 continue
 
             url = f"{self.heavy_addr}/subchain/advertise"
-            # Read API key for auth with Heavy node
             api_keys = list(load_api_keys())
             headers = {}
             if api_keys:
@@ -196,7 +215,7 @@ class MediumNode:
             payload = {
                 "subchain_id": f"subchain-{self.node_id[:8]}",
                 "aggregator_node_id": self.node_id,
-                "aggregator_addr": f"localhost:{self.api_port}",
+                "aggregator_addr": f"{public_ip}:{self.api_port}",  # Real IP, not localhost
                 "app_type": os.getenv("APP_TYPE", "general"),
                 "capacity_percent": max(0, 100 - len(self.mempool)),
                 "last_seen": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -225,9 +244,43 @@ class MediumNode:
             batch = self.mempool[:100]
             self.mempool = self.mempool[100:]
 
-            log.info(f"Flushing batch of {len(batch)} transactions to Heavy node")
-            self.batches_submitted += 1
-            # In production: POST batch to Heavy node's /subchain/batch_anchor
+            # Compute batch root: SHA256 of concatenated tx IDs
+            combined = "".join(tx.get("id", str(i)) for i, tx in enumerate(batch))
+            batch_hash = hashlib.sha256(combined.encode()).digest()
+            # serde_json Vec<u8> expects a JSON array of integers
+            batch_root = list(batch_hash)
+
+            url = f"{self.heavy_addr}/subchain/batch_anchor"
+            api_keys = list(load_api_keys())
+            headers = {"Content-Type": "application/json"}
+            if api_keys:
+                headers["Authorization"] = f"Bearer {api_keys[0]}"
+
+            payload = {
+                "batch_root": batch_root,
+                "aggregator": self.node_id,
+                "leaf_count": len(batch),
+                "serialized_leaves_ref": None,
+            }
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        url, json=payload, headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            log.info(
+                                f"Anchored batch of {len(batch)} txs "
+                                f"(root: {batch_hash.hex()[:12]}...)"
+                            )
+                            self.batches_submitted += 1
+                        else:
+                            log.warning(f"Batch anchor HTTP {resp.status} — re-queuing {len(batch)} txs")
+                            self.mempool = batch + self.mempool
+            except Exception as e:
+                log.warning(f"Batch anchor error: {e} — re-queuing {len(batch)} txs")
+                self.mempool = batch + self.mempool
 
     # ─── Server ─────────────────────────────────────────────────────
 
