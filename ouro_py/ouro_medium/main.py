@@ -182,9 +182,33 @@ class MediumNode:
         self.shadow_mode = True
 
     async def _detect_public_addr(self) -> str:
-        """Detect our public-facing IP for advertising to peers."""
+        """Detect our public-facing IP for advertising to peers.
+
+        Priority:
+        1. PUBLIC_ADDR env var (most reliable — set this in production)
+        2. External IP via ipify.org (works through NAT)
+        3. Outbound socket local address (LAN IP — fallback only)
+        4. Hostname resolution (last resort)
+        """
         if os.getenv("PUBLIC_ADDR"):
             return os.getenv("PUBLIC_ADDR")
+
+        # Try to get the actual public internet IP via an external service
+        for url in ["https://api.ipify.org", "https://api4.my-ip.io/ip"]:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        url, timeout=aiohttp.ClientTimeout(total=4)
+                    ) as resp:
+                        if resp.status == 200:
+                            ip = (await resp.text()).strip()
+                            if ip and len(ip) < 40:  # sanity check
+                                log.info(f"Detected public IP: {ip}")
+                                return ip
+            except Exception:
+                continue
+
+        # Fallback: outbound socket (gives LAN IP behind NAT)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.connect(("8.8.8.8", 80))
