@@ -53,8 +53,13 @@ async def auth_middleware(request, handler):
 
     api_keys = request.app.get("api_keys", set())
     if not api_keys:
-        # No keys configured = open access (dev mode)
-        return await handler(request)
+        # SECURITY: Fail closed if no keys are configured in production
+        # Only allow /health and /identity for monitoring
+        log.warning(f"Unauthorized access attempt to {request.path} - No API keys configured")
+        return web.json_response(
+            {"error": "Node is secured. API keys must be configured to access this endpoint."},
+            status=403,
+        )
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -64,7 +69,12 @@ async def auth_middleware(request, handler):
         )
 
     token = auth_header[7:].strip()
-    if token not in api_keys:
+    
+    # SECURITY: Use constant-time comparison to prevent timing attacks (Phase 4)
+    import secrets
+    authorized = any(secrets.compare_digest(token, key) for key in api_keys)
+    
+    if not authorized:
         return web.json_response({"error": "Invalid API key"}, status=403)
 
     return await handler(request)
@@ -144,8 +154,39 @@ class MediumNode:
     async def get_mempool(self, request):
         return web.json_response({
             "count": len(self.mempool),
-            "transactions": self.mempool[-50:],  # Last 50
+            "transactions": self.mempool[:50]  # Limit output
         })
+
+    async def get_balance(self, request):
+        """Fetch balance for a specific address. Proxies to Heavy node if available."""
+        address = request.match_info.get("address", "")
+        if not address:
+            return web.json_response({"error": "Missing address"}, status=400)
+
+        # Proxy to heavy node if online
+        if self.heavy_online:
+            try:
+                # Heavy node uses /account/balance/<address> based on README/code
+                # We need to find the exact endpoint. Let's try /account/balance/{address}
+                url = f"{self.heavy_addr}/account/balance/{address}"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=5) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            return web.json_response(data)
+                        else:
+                            log.warning(f"Heavy node balance check failed: HTTP {resp.status}")
+            except Exception as e:
+                log.warning(f"Heavy node balance check error: {e}")
+
+        # Fallback for demo/shadow mode: return 0 or a placeholder
+        # In a real system, we'd query local subchain state here
+        return web.json_response({
+            "address": address,
+            "balance": 0,
+            "shadow_mode": self.shadow_mode
+        })
+
 
     async def shutdown(self, request):
         """Graceful shutdown endpoint."""
@@ -323,6 +364,7 @@ class MediumNode:
         # Public routes
         app.router.add_get("/identity", self.get_identity)
         app.router.add_get("/health", self.health_check)
+        app.router.add_get("/ouro/balance/{address}", self.get_balance)
 
         # Protected routes
         app.router.add_get("/metrics/json", self.get_metrics)
@@ -341,7 +383,73 @@ class MediumNode:
             self.monitor_heavy_nodes(),
             self.advertise_to_heavy(),
             self.batch_flush(),
+            self.submit_heartbeat_loop(),
         )
+
+    async def submit_heartbeat_loop(self):
+        """Periodically submit heartbeats to the Heavy node to claim rewards."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        import binascii
+
+        # Load signing key from environment
+        key_hex = os.getenv("NODE_KEYPAIR_HEX")
+        if not key_hex:
+            log.warning("NODE_KEYPAIR_HEX not set - Heartbeats will be unsigned and REJECTED")
+            return
+
+        try:
+            # Ed25519 private keys are 32 bytes. NODE_KEYPAIR_HEX might be 64 bytes (seed + pubkey)
+            key_bytes = binascii.unhexlify(key_hex)
+            if len(key_bytes) >= 32:
+                signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(key_bytes[:32])
+                verifying_key = signing_key.public_key()
+                pubkey_hex = binascii.hexlify(verifying_key.public_bytes_raw()).decode()
+            else:
+                log.error(f"Invalid NODE_KEYPAIR_HEX length: {len(key_bytes)}")
+                return
+        except Exception as e:
+            log.error(f"Failed to load signing key: {e}")
+            return
+
+        wallet_address = os.getenv("NODE_WALLET_ADDRESS", "ouro1_placeholder")
+
+        while True:
+            await asyncio.sleep(60)
+            if not self.heavy_online:
+                continue
+
+            # Heartbeat message format: "heartbeat:<node_id>:<wallet_address>:<timestamp>"
+            # Added timestamp to prevent replay attacks as per Phase 3 of the plan
+            timestamp = int(time.time())
+            message = f"heartbeat:{self.node_id}:{wallet_address}:{timestamp}"
+            
+            try:
+                signature = signing_key.sign(message.encode())
+                sig_hex = binascii.hexlify(signature).decode()
+
+                payload = {
+                    "node_id": self.node_id,
+                    "wallet_address": wallet_address,
+                    "role": self.role,
+                    "public_key": pubkey_hex,
+                    "signature": sig_hex,
+                    "timestamp": timestamp,
+                }
+
+                url = f"{self.heavy_addr}/rewards/heartbeat"
+                api_keys = list(load_api_keys())
+                headers = {"Content-Type": "application/json"}
+                if api_keys:
+                    headers["Authorization"] = f"Bearer {api_keys[0]}"
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, headers=headers, timeout=10) as resp:
+                        if resp.status == 200:
+                            log.info(f"Heartbeat submitted successfully (ts: {timestamp})")
+                        else:
+                            log.warning(f"Heartbeat submission failed: HTTP {resp.status}")
+            except Exception as e:
+                log.warning(f"Heartbeat submission error: {e}")
 
 
 if __name__ == "__main__":

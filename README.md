@@ -4,6 +4,10 @@ A high-performance decentralized blockchain with tiered node architecture, post-
 
 **Join the network in under 5 minutes | Choose your role: Heavy, Medium, or Light | Earn OURO coins**
 
+[![Discord](https://img.shields.io/discord/1?label=Discord&logo=discord&color=5865F2)](https://discord.gg/GShN5gNj)
+
+> **Community:** [Join our Discord](https://discord.gg/GShN5gNj) — get help, share your node stats, and connect with other operators.
+
 ---
 
 ## Quick Start

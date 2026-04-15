@@ -405,6 +405,7 @@ if ($ouroProcess) {
     Write-Host "  $installDir\start-node.bat  - Start" -ForegroundColor White
     Write-Host ""
     Write-Host "You're now part of the Ouroboros network!" -ForegroundColor Green
+    Write-Host "  Discord: https://discord.gg/GShN5gNj" -ForegroundColor Cyan
     Write-Host "==========================================" -ForegroundColor Green
 } else {
     Write-Host ""

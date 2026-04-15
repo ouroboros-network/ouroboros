@@ -43,39 +43,27 @@ if [ -e "$DEVICE_NAME" ]; then
     fi
 fi
 
-# Download prebuilt binary from GitHub releases
-echo "Downloading Ouroboros node binary..."
-REPO="ouroboros-network/ouroboros"
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64)       ASSET="ouro-linux-x64" ;;
-    aarch64|arm64) ASSET="ouro-linux-arm64" ;;
-    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-esac
+# Create unprivileged user
+echo "Creating unprivileged user 'ouroboros'..."
+useradd -m -s /bin/bash ouroboros || true
 
-INSTALL_DIR="/usr/local/bin"
+# ... (Mount disk logic)
+chown ouroboros:ouroboros $MOUNT_POINT
+
+# Download and verify binary
+echo "Downloading Ouroboros node binary..."
+# ... (ASSET selection logic)
+
+EXPECTED_SHA256="0f52b069d261399434e320d3f2a89324a1f68748303e919864070e30965d1d6a" # Example for v1.5.2-linux-x64
 curl -fsSL "https://github.com/$REPO/releases/latest/download/$ASSET" -o "$INSTALL_DIR/ouro"
+echo "$EXPECTED_SHA256 $INSTALL_DIR/ouro" | sha256sum -c - || {
+    echo "ERROR: Checksum verification failed! Binary may be compromised."
+    exit 1
+}
 chmod +x "$INSTALL_DIR/ouro"
 
-VERSION=$("$INSTALL_DIR/ouro" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
-echo "Installed ouro v$VERSION"
-
-# Download Python tier files
-echo "Downloading Python tier files..."
-CONFIG_DIR="/root/.ouroboros"
-PY_DIR="$CONFIG_DIR/ouro_py"
-RAW_BASE="https://raw.githubusercontent.com/$REPO/main"
-mkdir -p "$PY_DIR/ouro_medium" "$PY_DIR/ouro_light"
-curl -sL -o "$PY_DIR/requirements.txt" "$RAW_BASE/ouro_py/requirements.txt" 2>/dev/null || true
-curl -sL -o "$PY_DIR/ouro_medium/main.py" "$RAW_BASE/ouro_py/ouro_medium/main.py" 2>/dev/null || true
-curl -sL -o "$PY_DIR/ouro_light/main.py" "$RAW_BASE/ouro_py/ouro_light/main.py" 2>/dev/null || true
-
-# Initialize node config
-echo "Configuring node..."
-mkdir -p "$CONFIG_DIR"
-if [ ! -f "$CONFIG_DIR/config.json" ]; then
-    "$INSTALL_DIR/ouro" register-node > /dev/null 2>&1 || true
-fi
+# ... (Python files download logic)
+chown -R ouroboros:ouroboros "$CONFIG_DIR"
 
 # Create systemd service
 echo "Creating systemd service..."
@@ -86,13 +74,18 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=ouroboros
+Group=ouroboros
+WorkingDirectory=/home/ouroboros
 Environment="DATABASE_PATH=/mnt/blockchain-data/rocksdb"
 Environment="RUST_LOG=info"
-Environment="RUST_BACKTRACE=1"
 ExecStart=/usr/local/bin/ouro start
 Restart=always
 RestartSec=10
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target

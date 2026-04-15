@@ -134,6 +134,30 @@ class BlockHeader:
 
 
 @dataclass
+class Resources:
+    """Node resource usage information"""
+
+    cpu_pct: float
+    mem_mb: int
+    disk_gb_used: float
+    disk_gb_total: float
+    net_in_kbps: float
+    net_out_kbps: float
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "Resources":
+        """Create from dictionary"""
+        return Resources(
+            cpu_pct=data["cpu_pct"],
+            mem_mb=data["mem_mb"],
+            disk_gb_used=data["disk_gb_used"],
+            disk_gb_total=data["disk_gb_total"],
+            net_in_kbps=data["net_in_kbps"],
+            net_out_kbps=data["net_out_kbps"],
+        )
+
+
+@dataclass
 class TransactionData:
     """Transaction data"""
 

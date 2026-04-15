@@ -139,3 +139,12 @@ export interface TxHistoryResponse {
 export interface BlocksResponse {
   blocks: BlockHeader[];
 }
+
+export interface ResourcesResponse {
+  cpu_pct: number;
+  mem_mb: number;
+  disk_gb_used: number;
+  disk_gb_total: number;
+  net_in_kbps: number;
+  net_out_kbps: number;
+}

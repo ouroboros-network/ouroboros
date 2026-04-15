@@ -208,6 +208,9 @@ if %ERRORLEVEL% EQU 0 (
     echo    npm install ouro-sdk
     echo    pip install ouro-sdk
     echo.
+    echo  Community:
+    echo    https://discord.gg/GShN5gNj
+    echo.
 ) else (
     echo.
     echo  WARNING: Node may have failed to start.

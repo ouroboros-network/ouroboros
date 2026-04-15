@@ -2,6 +2,8 @@
 
 Welcome! This guide will help you join the Ouroboros blockchain network as a node operator.
 
+**Need help? [Join our Discord](https://discord.gg/GShN5gNj)**
+
 ## Choose Your Role
 
 Ouroboros uses a three-tier architecture. Pick the role that matches your hardware and goals:

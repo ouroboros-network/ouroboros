@@ -26,14 +26,17 @@ import type {
 export class OuroClient {
   private baseUrl: string;
   private client: AxiosInstance;
+  private apiKey?: string;
 
-  constructor(nodeUrl: string) {
+  constructor(nodeUrl: string, apiKey?: string) {
     this.baseUrl = nodeUrl.replace(/\/$/, '');
+    this.apiKey = apiKey;
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
+        ...(this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {}),
       },
     });
   }
@@ -201,6 +204,49 @@ export class OuroClient {
       return response.status >= 200 && response.status < 300;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Get node resource usage (CPU, RAM, Disk, Network)
+   */
+  async getResources(): Promise<ResourcesResponse> {
+    try {
+      const response = await this.client.get<ResourcesResponse>('/resources');
+      return response.data;
+    } catch (error) {
+      throw new NetworkError(this.getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Get transaction history for an address
+   */
+  async getTransactionHistory(
+    address: string,
+    limit: number = 10
+  ): Promise<TransactionData[]> {
+    try {
+      const response = await this.client.get<TxHistoryResponse>(
+        `/ouro/transactions/${address}?limit=${limit}`
+      );
+      return response.data.transactions;
+    } catch (error) {
+      throw new NetworkError(this.getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Get recent blocks
+   */
+  async getBlocks(limit: number = 10): Promise<BlockHeader[]> {
+    try {
+      const response = await this.client.get<BlocksResponse>(
+        `/blocks?limit=${limit}`
+      );
+      return response.data.blocks;
+    } catch (error) {
+      throw new NetworkError(this.getErrorMessage(error));
     }
   }
 

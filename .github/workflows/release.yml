@@ -9,14 +9,77 @@ permissions:
   contents: write
 
 jobs:
+  build:
+    name: Build - ${{ matrix.platform.os }} (${{ matrix.platform.target }})
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: ouro-linux-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: ouro-windows-x64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary_name: ouro-macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: ouro-macos-arm64
+
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Install Protoc (Windows)
+        if: matrix.platform.os == 'windows-latest'
+        run: choco install protoc
+
+      - name: Install Protoc (Linux)
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: sudo apt-get install -y protobuf-compiler
+
+      - name: Build Ouro Dag
+        run: |
+          cd ouro_dag
+          cargo build --release --target ${{ matrix.platform.target }}
+
+      - name: Rename Binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
+            mv ouro_dag/target/${{ matrix.platform.target }}/release/ouro_dag.exe ${{ matrix.platform.binary_name }}
+          else
+            mv ouro_dag/target/${{ matrix.platform.target }}/release/ouro_dag ${{ matrix.platform.binary_name }}
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform.binary_name }}
+          path: ${{ matrix.platform.binary_name }}
+
   release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          files: artifacts/*
           draft: false
           prerelease: false
           generate_release_notes: true
