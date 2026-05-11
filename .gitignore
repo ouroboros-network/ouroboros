@@ -75,6 +75,26 @@ SESSION_PROGRESS_SUMMARY.md
 POSTGRESQL_TO_ROCKSDB_CONVERSION_STATUS.md
 V0.3.0_ROADMAP.md
 
+# Local test profiles and databases
+$N1_Profile/
+$N2_Profile/
+db_n*/
+db_n1*/
+db_n2*/
+n1_*.txt
+n2_*.txt
+test_keys.pdb
+venv_medium/
+
+# Local test scripts
+fix_*.py
+fund_account.py
+gen_keys.rs
+production_test.ps1
+start_nodes.ps1
+submit_dummy.py
+test_legacy_bypass.py
+
 # Source code (private — only binaries are distributed)
 ouro_dag/
 contract_templates/

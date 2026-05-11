@@ -39,7 +39,7 @@ def load_api_keys():
     return {k.strip() for k in keys_str.split(",") if k.strip()}
 
 
-PUBLIC_ROUTES = {"/health", "/identity"}
+PUBLIC_ROUTES = {"/health", "/identity", "/akasha/sensory"}
 
 
 @web.middleware
@@ -139,7 +139,7 @@ class LightNode:
             headers["Authorization"] = f"Bearer {api_keys[0]}"
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
                 async with session.post(
                     f"http://{self.aggregator_addr}/tx/submit",
                     json=tx, headers=headers,
@@ -168,7 +168,7 @@ class LightNode:
             headers["Authorization"] = f"Bearer {api_keys[0]}"
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
                 async with session.get(
                     f"{self.heavy_addr}/state_proof",
                     headers=headers,
@@ -212,7 +212,7 @@ class LightNode:
         url = f"{self.heavy_addr}/subchain/discover?type={app_type}"
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
                 async with session.get(
                     url, headers=headers,
                     timeout=aiohttp.ClientTimeout(total=5),
@@ -241,7 +241,7 @@ class LightNode:
         await self.discover_aggregator()
 
         while True:
-            await asyncio.sleep(30)
+            await asyncio.sleep(5)
 
             # Re-sync state periodically
             await self.sync_state_via_zk()

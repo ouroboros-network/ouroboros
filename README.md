@@ -96,9 +96,17 @@ ouro join --peer 136.112.101.176:9000
 
 # Start in headless mode
 ouro start --headless
-
+```bash
 # Register your node identity
 ouro register-node --node-id <your-node-id>
+```
+
+### Local Networking (Private IPs)
+
+By default, the node rejects private, loopback, and multicast IPs to protect public networks. If you are running a local cluster, using a VPN, or testing on a private network, enable private IP support:
+
+```bash
+ALLOW_PRIVATE_IPS=true ouro start
 ```
 
 ### Quick Reference
